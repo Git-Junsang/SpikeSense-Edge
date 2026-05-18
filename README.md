@@ -10,22 +10,26 @@ PyTorch로 학습한 PLIF-T SNN 모델을 Xilinx Artix-7 FPGA에 이식하는 �
 ## 시스템 구성
 
 ```
-[마이크]
-   │ 16kHz PCM
+[USB 마이크 ×2]
+   │ 16kHz PCM (채널 독립)
    ▼
-[Raspberry Pi 5]  ── Mel Spectrogram 전처리 (librosa, <1ms/버퍼)
-   │ 40채널 × INT8, 프레임마다
+[Raspberry Pi 5]
+   ├─ CH0: Mel Spectrogram → INT8 × 40ch
+   └─ CH1: Mel Spectrogram → INT8 × 40ch
+   │ SPI (10MHz, 41바이트 패킷/프레임)
    ▼
-[Artix-7 FPGA]  ── SNN 추론 가속기 (Verilog RTL)
-   │
+[Nexys A7 100T FPGA]
+   ├─ SPI slave → dual_snn_top
+   │    ├─ snn_top #0 (CH0) → LED0
+   │    └─ snn_top #1 (CH1) → LED1
    ▼
-anomaly_flag (0=정상 / 1=이상)
+anomaly_flag × 2 (0=정상 / 1=이상)
 ```
 
 | 구성 요소 | 역할 |
 |-----------|------|
-| Raspberry Pi 5 | 오디오 수집, Mel Spectrogram 전처리 |
-| Artix-7 FPGA | PLIF-T SNN 추론 가속 |
+| Raspberry Pi 5 | 2채널 오디오 수집, Mel Spectrogram 전처리, SPI 전송 |
+| Nexys A7 100T (Artix-7) | PLIF-T SNN 추론 가속 (2채널 독립 동시 처리) |
 
 ---
 
@@ -63,16 +67,24 @@ SpikeSense-Edge/
 │   ├── snn_model.py            # PLIF-T SNN 모델 정의 (PyTorch)
 │   ├── train.py                # 학습 루프 (Focal Loss, Mixup, Resume 지원)
 │   ├── test_model_numpy.py     # NumPy 순전파 검증 (PyTorch 불필요)
-│   ├── export_weights.py       # (예정) INT8 가중치 추출 → hex 파일
+│   ├── export_weights.py       # INT8 가중치 추출 → hex 파일
 │   └── best_model_mimii_v2-1.pth  # 최고 성능 모델 (MIMII 데이터셋)
 │
 ├── hardware/
-│   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 3 완료)
+│   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 4 완료)
 │   │   └── weights/            # INT8 가중치 hex + 골든 벡터
+│   ├── constraints/            # Vivado XDC 핀 제약 (Phase 5~6)
 │   ├── src_old/                # 구 RTL — Level Crossing + LIF (보존)
 │   ├── testbench/              # 신규 테스트벤치 .v 소스
 │   ├── testbench_old/          # 구 RTL 테스트벤치 (보존)
 │   └── sim/                    # 컴파일 결과물 (.gitignore)
+│
+├── rpi/                        # RPi5 소프트웨어 (Phase 7~9)
+│   ├── requirements.txt        # sounddevice, librosa, spidev, numpy
+│   ├── capture_mel.py          # USB 마이크 2채널 캡처 + Mel 변환
+│   ├── fpga_spi.py             # SPI 드라이버 (41바이트 패킷)
+│   ├── main.py                 # 메인 루프 (2채널 파이프라인)
+│   └── demo.py                 # 터미널 UI 데모
 │
 ├── data/                       # 정식 학습 데이터 (normal/, anomaly/)
 ├── data_sub/                   # 경량 검증 데이터
@@ -134,19 +146,20 @@ python test_model_numpy.py
 ## 하드웨어 (FPGA RTL)
 
 > **현재 상태**: Phase 4 완료 — 전체 RTL 구현 및 골든 벡터 검증 통과.  
-> `src_old/`에 구 설계(Level Crossing + LIF) 보존. 신규 설계(`src/`)는 synthesis 준비 완료.
+> Phase 5~9: SPI 인터페이스 + 듀얼채널 RTL → Vivado 합성 → RPi5 소프트웨어 → 데모.
 
-### 신규 RTL 설계 목표 (`hardware/src/`)
+### RTL 설계 사양 (`hardware/src/`)
 
 | 항목 | 사양 |
 |------|------|
-| 타깃 보드 | Xilinx Artix-7 |
-| 입력 인터페이스 | `mel_in[40×8bit]` + `frame_valid` (RPi5에서 수신) |
+| 타깃 보드 | Nexys A7 100T (XC7A100T) |
+| 입력 인터페이스 | SPI slave (10MHz, 41바이트 패킷) |
+| 채널 수 | 2채널 동시 (snn_top 2개 인스턴스) |
 | 처리 방식 | 시분할(Time-Multiplexing), 162클럭/타임스텝 |
-| 가중치 저장 | BRAM (9,280 × INT8 ≈ 74Kbits) |
+| 가중치 저장 | BRAM (9,280 × INT8 ≈ 74Kbits, 채널당) |
 | 막전위 형식 | 16-bit signed, Soft Reset |
 | 이상 판정 | Leaky Counter (`cnt_anomaly > cnt_normal`) |
-| 출력 | `anomaly_flag` (1-bit) |
+| 출력 | `ch0_anomaly`, `ch1_anomaly` → LED0/LED1 |
 
 ### 시뮬레이션 (Testbench)
 
@@ -259,6 +272,33 @@ mkdir -p hardware/sim
 - [x] `plift_core_tb.v` — PLIF-T 뉴런 단독 (12 TC)
 - [x] `tb_snn_top.v` — 골든 벡터 기반 전체 시뮬레이션 (312 TC)
   - Normal/Anomaly 각 31 타임스텝 × L3 막전위·스파이크·anomaly_flag bit-exact 일치
+
+**Phase 5 — 듀얼채널 RTL + SPI 인터페이스** ⬜ 예정
+- [ ] `spi_slave.v` — SPI 수신기 (CPOL=0, CPHA=0, 41바이트 패킷 디코더)
+- [ ] `dual_snn_top.v` — 2채널 최상위 (spi_slave + snn_top ×2 + 채널 디먹스)
+- [ ] `hardware/constraints/nexys_a7.xdc` — Nexys A7 100T 핀 할당
+- [ ] `testbench/tb_dual_snn_top.v` — SPI 시뮬레이션 + 2채널 골든 벡터 PASS
+
+**Phase 6 — Vivado 합성 및 FPGA 구현** ⬜ 예정
+- [ ] Vivado 프로젝트 생성 (Top: `dual_snn_top`, target: xc7a100tcsg324-1)
+- [ ] 합성 (Synthesis) — LUT ~5K / 63K, BRAM ~6 BRAM36 예상
+- [ ] 구현 (Implementation) — WNS ≥ 0 확인
+- [ ] 비트스트림 생성 및 FPGA 프로그래밍 → LED 기본 동작 확인
+
+**Phase 7 — RPi5 소프트웨어** ⬜ 예정
+- [ ] `rpi/capture_mel.py` — USB 마이크 2채널 캡처 + Mel INT8 변환
+- [ ] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 10MHz)
+- [ ] `rpi/main.py` — 2채널 실시간 파이프라인 (레이턴시 목표 ≤ 550ms)
+- [ ] `--dry-run` 모드 — FPGA 없이 numpy 추론으로 파이프라인 검증
+
+**Phase 8 — 하드웨어 통합 테스트** ⬜ 예정
+- [ ] SPI 파형 확인 (RPi5 → Nexys A7 배선 검증)
+- [ ] 실제 팬 소음으로 `anomaly_flag` 정확도 테스트
+- [ ] 2채널 독립 동작 확인 (ch0만 이상음, ch1은 정상)
+
+**Phase 9 — 데모** ⬜ 예정
+- [ ] `rpi/demo.py` — 터미널 UI (2채널 실시간 상태 표시)
+- [ ] 데모 시연 (이상음 재생 → LED + 터미널 동시 반응 확인)
 
 ---
 
