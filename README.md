@@ -133,8 +133,8 @@ python test_model_numpy.py
 
 ## 하드웨어 (FPGA RTL)
 
-> **현재 상태**: `src_old/`에 구 설계(Level Crossing + LIF) 보존.  
-> 신규 설계(`src/`)는 Mel Spectrogram + PLIF-T 기반으로 작성 중.
+> **현재 상태**: Phase 4 완료 — 전체 RTL 구현 및 골든 벡터 검증 통과.  
+> `src_old/`에 구 설계(Level Crossing + LIF) 보존. 신규 설계(`src/`)는 synthesis 준비 완료.
 
 ### 신규 RTL 설계 목표 (`hardware/src/`)
 
@@ -152,12 +152,13 @@ python test_model_numpy.py
 
 #### 테스트벤치 파일 (`hardware/testbench/`)
 
-| 파일 | 대상 모듈 | 외부 파일 필요 |
-|------|-----------|--------------|
-| `plift_core_tb.v` | PLIF-T 뉴런 단독 | 없음 |
-| `mac_unit_tb.v` | MAC 단독 | 없음 |
-| `phase2_tb.v` | Phase 2 핵심 모듈 6종 (32 TC) | `weights/*.hex` |
-| `phase3_tb.v` | Phase 3 control_fsm·snn_top (57 TC) | `weights/*.hex` |
+| 파일 | 대상 모듈 | TC 수 | 외부 파일 필요 |
+|------|-----------|-------|--------------|
+| `plift_core_tb.v` | PLIF-T 뉴런 단독 | 12 | 없음 |
+| `mac_unit_tb.v` | MAC 단독 | — | 없음 |
+| `phase2_tb.v` | Phase 2 핵심 모듈 6종 | 32 | `weights/*.hex` |
+| `phase3_tb.v` | Phase 3 control_fsm·snn_top | 57 | `weights/*.hex` |
+| `tb_snn_top.v` | 전체 시스템 골든 벡터 검증 | 312 | `weights/golden/*.hex` |
 
 #### A. VSCode 터미널 (iverilog)
 
@@ -182,6 +183,11 @@ mkdir -p hardware/sim
 /usr/bin/iverilog -g2001 -o hardware/sim/phase3_tb \
     hardware/testbench/phase3_tb.v hardware/src/*.v
 /usr/bin/vvp hardware/sim/phase3_tb
+
+# Phase 4 — 전체 시스템 골든 벡터 검증
+/usr/bin/iverilog -g2001 -o hardware/sim/snn_top \
+    hardware/testbench/tb_snn_top.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/snn_top
 ```
 
 #### B. Vivado (Windows / SMB Z:/ 마운트)
@@ -249,8 +255,10 @@ mkdir -p hardware/sim
 - [x] `snn_top.v` — 최상위 통합 (`mel_in[40×8bit]` + `frame_valid` → `anomaly_flag`)
 - [x] 테스트벤치 — `phase3_tb.v` (57 TC 전체 통과)
 
-**Phase 4 — 검증 및 마무리**
-- [ ] `phase4_tb.v` — 골든 벡터 기반 전체 시스템 RTL 시뮬레이션 (`anomaly_flag` 검증)
+**Phase 4 — 검증 및 마무리** ✅ 완료
+- [x] `plift_core_tb.v` — PLIF-T 뉴런 단독 (12 TC)
+- [x] `tb_snn_top.v` — 골든 벡터 기반 전체 시뮬레이션 (312 TC)
+  - Normal/Anomaly 각 31 타임스텝 × L3 막전위·스파이크·anomaly_flag bit-exact 일치
 
 ---
 
