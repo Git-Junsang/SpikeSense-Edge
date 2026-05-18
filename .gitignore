@@ -1,0 +1,10 @@
+# iverilog 컴파일 결과물 (바이너리, VCD)
+hardware/sim/
+
+# Python 캐시
+__pycache__/
+*.pyc
+software/cache_*.npz
+
+# 모델 파일 (용량)
+software/*.pth

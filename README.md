@@ -67,9 +67,12 @@ SpikeSense-Edge/
 │   └── best_model_mimii_v2-1.pth  # 최고 성능 모델 (MIMII 데이터셋)
 │
 ├── hardware/
-│   ├── src/                    # (예정) 신규 RTL — Mel + PLIF-T
+│   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 2 완료)
+│   │   └── weights/            # INT8 가중치 hex + 골든 벡터
 │   ├── src_old/                # 구 RTL — Level Crossing + LIF (보존)
-│   └── testbench/              # Verilog 시뮬레이션 테스트벤치
+│   ├── testbench/              # 신규 테스트벤치 .v 소스
+│   ├── testbench_old/          # 구 RTL 테스트벤치 (보존)
+│   └── sim/                    # 컴파일 결과물 (.gitignore)
 │
 ├── data/                       # 정식 학습 데이터 (normal/, anomaly/)
 ├── data_sub/                   # 경량 검증 데이터
@@ -145,13 +148,57 @@ python test_model_numpy.py
 | 이상 판정 | Leaky Counter (`cnt_anomaly > cnt_normal`) |
 | 출력 | `anomaly_flag` (1-bit) |
 
-### 시뮬레이션
+### 시뮬레이션 (Testbench)
+
+#### 테스트벤치 파일 (`hardware/testbench/`)
+
+| 파일 | 대상 모듈 | 외부 파일 필요 |
+|------|-----------|--------------|
+| `plift_core_tb.v` | PLIF-T 뉴런 단독 (12 TC) | 없음 |
+| `mac_unit_tb.v` | MAC 단독 (8 TC) | 없음 |
+| `phase2_tb.v` | Phase 2 전체 (31 TC) | `weights/*.hex` |
+| `tb_phase2.v` | Phase 2 전체 + VCD 출력 | `weights/*.hex` |
+
+#### A. VSCode 터미널 (iverilog)
 
 ```bash
-# iverilog 사용 예시
-iverilog -o sim hardware/testbench/tb_snn_top.v hardware/src/*.v
-vvp sim
+mkdir -p hardware/sim
+
+# 단독 모듈 — 외부 파일 불필요, 즉시 실행
+/usr/bin/iverilog -g2001 -o hardware/sim/plift_core_tb \
+    hardware/testbench/plift_core_tb.v hardware/src/plift_core.v
+/usr/bin/vvp hardware/sim/plift_core_tb
+
+/usr/bin/iverilog -g2001 -o hardware/sim/mac_unit_tb \
+    hardware/testbench/mac_unit_tb.v hardware/src/mac_unit.v
+/usr/bin/vvp hardware/sim/mac_unit_tb
+
+# Phase 2 통합 (weights/ hex 파일 필요)
+/usr/bin/iverilog -g2001 -o hardware/sim/phase2_tb \
+    hardware/testbench/phase2_tb.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/phase2_tb
+
+# gtkwave용 VCD 생성
+/usr/bin/iverilog -g2001 -o hardware/sim/phase2 \
+    hardware/testbench/tb_phase2.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/phase2
+# gtkwave hardware/sim/phase2.vcd   ← GUI 환경에서
 ```
+
+#### B. Vivado (Windows / SMB Z:/ 마운트)
+
+> 서버의 `/data` 폴더가 Windows에서 `Z:/`로 마운트되어 있어야 합니다.
+
+1. **소스 추가**: Sources → Add Sources → Simulation  
+   - `Z:\...\SpikeSense-Edge\hardware\testbench\plift_core_tb.v`  
+   - `Z:\...\SpikeSense-Edge\hardware\src\plift_core.v` (대상 모듈)
+2. **Simulation 상단 모듈**: `plift_core_tb` 선택
+3. **`phase2_tb.v` 사용 시** (`$readmemh` 경로 필요):  
+   Project Settings → Simulation → **Simulation working directory**  
+   → `Z:\2026 CAU\서울대학교 학부인턴\git\SpikeSense-Edge` 로 변경
+4. Flow Navigator → **Run Simulation → Run Behavioral Simulation**
+5. Tcl Console: `run all` 입력 → $display 출력 확인  
+   파형: Objects 패널에서 신호를 Waveform 창으로 드래그
 
 ---
 
@@ -181,20 +228,21 @@ vvp sim
 ### 🔧 진행 중 — 신규 RTL (Mel Spectrogram + PLIF-T)
 
 **Phase 0 — 디렉토리 준비**
-- [ ] `hardware/src/` 폴더 생성
+- [x] `hardware/src/` 폴더 생성
 
 **Phase 1 — 가중치·파라미터 추출**
-- [ ] `export_weights.py` — `best_model_mimii_v2-1.pth` → INT8 양자화
-- [ ] W1/W2/W3/β/V_th를 `$readmemh` 호환 hex 파일로 출력 (`hardware/src/weights/`)
-- [ ] `test_model_numpy.py` 수정 — INT8 가중치 기반 골든 벡터 저장
+- [x] `export_weights.py` — `best_model_mimii_v2-1.pth` → INT8 양자화
+- [x] W1/W2/W3/β/V_th를 `$readmemh` 호환 hex 파일로 출력 (`hardware/src/weights/`)
+- [x] `test_model_numpy.py` 수정 — INT8 가중치 기반 골든 벡터 저장
 
-**Phase 2 — 핵심 연산 모듈**
-- [ ] `plift_core.v` — PLIF-T 뉴런 (β·V_th 파라미터 입력, soft reset)
-- [ ] `mac_unit.v` — INT8×INT8→INT16 누적, 팬인 가변 (40/128/32)
-- [ ] `weight_bram.v` — 9,280×8bit BRAM 가중치 저장
-- [ ] `param_rom.v` — β(162개) + V_th(162개) INT8 ROM
-- [ ] `membrane_mem.v` — 162뉴런 막전위 16-bit BRAM
-- [ ] `spike_mem.v` — 레이어별 스파이크 임시 저장 (L1: 128bit, L2: 32bit)
+**Phase 2 — 핵심 연산 모듈** ✅ 완료
+- [x] `plift_core.v` — PLIF-T 뉴런 (β·V_th 파라미터 입력, soft reset)
+- [x] `mac_unit.v` — INT8×INT8→INT16 누적, 팬인 가변 (40/128/32)
+- [x] `weight_bram.v` — 9,280×8bit BRAM 가중치 저장
+- [x] `param_rom.v` — β(162개) + V_th(162개) INT8 ROM
+- [x] `membrane_mem.v` — 162뉴런 막전위 16-bit BRAM
+- [x] `spike_mem.v` — 레이어별 스파이크 임시 저장 (L1: 128bit, L2: 32bit)
+- [x] 테스트벤치 — `plift_core_tb.v` / `mac_unit_tb.v` / `phase2_tb.v` (32 TC 전체 통과)
 
 **Phase 3 — 제어·통합 모듈**
 - [ ] `control_fsm.v` — 3레이어 시퀀서 FSM (L1×128 → L2×32 → L3×2)
