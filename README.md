@@ -67,7 +67,7 @@ SpikeSense-Edge/
 │   └── best_model_mimii_v2-1.pth  # 최고 성능 모델 (MIMII 데이터셋)
 │
 ├── hardware/
-│   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 2 완료)
+│   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 3 완료)
 │   │   └── weights/            # INT8 가중치 hex + 골든 벡터
 │   ├── src_old/                # 구 RTL — Level Crossing + LIF (보존)
 │   ├── testbench/              # 신규 테스트벤치 .v 소스
@@ -154,10 +154,10 @@ python test_model_numpy.py
 
 | 파일 | 대상 모듈 | 외부 파일 필요 |
 |------|-----------|--------------|
-| `plift_core_tb.v` | PLIF-T 뉴런 단독 (12 TC) | 없음 |
-| `mac_unit_tb.v` | MAC 단독 (8 TC) | 없음 |
-| `phase2_tb.v` | Phase 2 전체 (31 TC) | `weights/*.hex` |
-| `tb_phase2.v` | Phase 2 전체 + VCD 출력 | `weights/*.hex` |
+| `plift_core_tb.v` | PLIF-T 뉴런 단독 | 없음 |
+| `mac_unit_tb.v` | MAC 단독 | 없음 |
+| `phase2_tb.v` | Phase 2 핵심 모듈 6종 (32 TC) | `weights/*.hex` |
+| `phase3_tb.v` | Phase 3 control_fsm·snn_top (57 TC) | `weights/*.hex` |
 
 #### A. VSCode 터미널 (iverilog)
 
@@ -173,16 +173,15 @@ mkdir -p hardware/sim
     hardware/testbench/mac_unit_tb.v hardware/src/mac_unit.v
 /usr/bin/vvp hardware/sim/mac_unit_tb
 
-# Phase 2 통합 (weights/ hex 파일 필요)
+# Phase 2 (weights/ hex 파일 필요)
 /usr/bin/iverilog -g2001 -o hardware/sim/phase2_tb \
     hardware/testbench/phase2_tb.v hardware/src/*.v
 /usr/bin/vvp hardware/sim/phase2_tb
 
-# gtkwave용 VCD 생성
-/usr/bin/iverilog -g2001 -o hardware/sim/phase2 \
-    hardware/testbench/tb_phase2.v hardware/src/*.v
-/usr/bin/vvp hardware/sim/phase2
-# gtkwave hardware/sim/phase2.vcd   ← GUI 환경에서
+# Phase 3
+/usr/bin/iverilog -g2001 -o hardware/sim/phase3_tb \
+    hardware/testbench/phase3_tb.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/phase3_tb
 ```
 
 #### B. Vivado (Windows / SMB Z:/ 마운트)
@@ -244,15 +243,14 @@ mkdir -p hardware/sim
 - [x] `spike_mem.v` — 레이어별 스파이크 임시 저장 (L1: 128bit, L2: 32bit)
 - [x] 테스트벤치 — `plift_core_tb.v` / `mac_unit_tb.v` / `phase2_tb.v` (32 TC 전체 통과)
 
-**Phase 3 — 제어·통합 모듈**
-- [ ] `control_fsm.v` — 3레이어 시퀀서 FSM (L1×128 → L2×32 → L3×2)
-- [ ] `anomaly_judge.v` — `src_old`에서 복사 (Leaky Counter, 수정 없음)
-- [ ] `snn_top.v` — 최상위 통합 (`mel_in[40×8bit]` + `frame_valid` → `anomaly_flag`)
+**Phase 3 — 제어·통합 모듈** ✅ 완료
+- [x] `control_fsm.v` — 3레이어 시퀀서 FSM (L1×128 → L2×32 → L3×2, 31 타임스텝)
+- [x] `anomaly_judge.v` — `src_old`에서 복사 (Leaky Counter, 수정 없음)
+- [x] `snn_top.v` — 최상위 통합 (`mel_in[40×8bit]` + `frame_valid` → `anomaly_flag`)
+- [x] 테스트벤치 — `phase3_tb.v` (57 TC 전체 통과)
 
 **Phase 4 — 검증 및 마무리**
-- [ ] `tb_plift_core.v` — PLIF-T 단일 뉴런 테스트벤치
-- [ ] `tb_snn_top.v` — 골든 벡터 기반 전체 시스템 RTL 시뮬레이션
-- [ ] iverilog 시뮬레이션 실행 및 `anomaly_flag` 출력 검증
+- [ ] `phase4_tb.v` — 골든 벡터 기반 전체 시스템 RTL 시뮬레이션 (`anomaly_flag` 검증)
 
 ---
 
