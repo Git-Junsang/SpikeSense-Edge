@@ -1,0 +1,215 @@
+# SpikeSense-Edge
+
+**FPGA 엣지 기반 SNN 음향 이상 감지 시스템**
+
+클라우드 없이 엣지 단에서 팬·기계 설비의 이상음을 실시간으로 감지합니다.  
+PyTorch로 학습한 PLIF-T SNN 모델을 Xilinx Artix-7 FPGA에 이식하는 것을 목표로 합니다.
+
+---
+
+## 시스템 구성
+
+```
+[마이크]
+   │ 16kHz PCM
+   ▼
+[Raspberry Pi 5]  ── Mel Spectrogram 전처리 (librosa, <1ms/버퍼)
+   │ 40채널 × INT8, 프레임마다
+   ▼
+[Artix-7 FPGA]  ── SNN 추론 가속기 (Verilog RTL)
+   │
+   ▼
+anomaly_flag (0=정상 / 1=이상)
+```
+
+| 구성 요소 | 역할 |
+|-----------|------|
+| Raspberry Pi 5 | 오디오 수집, Mel Spectrogram 전처리 |
+| Artix-7 FPGA | PLIF-T SNN 추론 가속 |
+
+---
+
+## 모델 아키텍처
+
+**PLIF-T SNN (Parametric LIF with Learnable Threshold)**
+
+```
+Input (40) → Hidden1 (128) → Hidden2 (32) → Output (2)
+              PLIF-T          PLIF-T         PLIF-T
+```
+
+- 입력: 500ms 오디오 버퍼 → 40채널 Log-Mel Spectrogram → 31 타임스텝
+- 뉴런: β(감쇠율)와 V_th(발화 임계값)가 모두 학습 파라미터
+- 분류: 타임스텝별 막전위 평균의 argmax → 정상(0) / 이상(1)
+- 총 가중치: 9,280개 (하드웨어에서 INT8 양자화)
+
+### 학습 설정
+
+| 항목 | 값 |
+|------|-----|
+| Loss | Focal Loss (γ=2, 클래스 빈도 기반 가중치) |
+| Optimizer | Adam (lr=0.002, weight_decay=1e-5) |
+| Scheduler | Cosine Annealing |
+| 데이터 증강 | SpecAugment (주파수·시간 마스킹 15%), Mixup (α=0.2) |
+| 피처 | 40-mel, FFT=1024, hop=512, 16kHz |
+
+---
+
+## 디렉토리 구조
+
+```
+SpikeSense-Edge/
+├── software/
+│   ├── snn_model.py            # PLIF-T SNN 모델 정의 (PyTorch)
+│   ├── train.py                # 학습 루프 (Focal Loss, Mixup, Resume 지원)
+│   ├── test_model_numpy.py     # NumPy 순전파 검증 (PyTorch 불필요)
+│   ├── export_weights.py       # (예정) INT8 가중치 추출 → hex 파일
+│   └── best_model_mimii_v2-1.pth  # 최고 성능 모델 (MIMII 데이터셋)
+│
+├── hardware/
+│   ├── src/                    # (예정) 신규 RTL — Mel + PLIF-T
+│   ├── src_old/                # 구 RTL — Level Crossing + LIF (보존)
+│   └── testbench/              # Verilog 시뮬레이션 테스트벤치
+│
+├── data/                       # 정식 학습 데이터 (normal/, anomaly/)
+├── data_sub/                   # 경량 검증 데이터
+└── CLAUDE.md                   # AI 코딩 보조 가이드
+```
+
+---
+
+## 시작하기
+
+### 요구 사항
+
+```bash
+pip install torch numpy librosa soundfile scikit-learn
+```
+
+### 데이터 준비
+
+```
+data/
+├── normal/     # 정상 작동 WAV 파일 (16kHz 권장)
+└── anomaly/    # 이상 작동 WAV 파일
+```
+
+지원 데이터셋: [MIMII Dataset](https://zenodo.org/record/3384388), [DCASE 2020 Task 2](https://dcase.community/challenge2020/task2-unsupervised-detection-of-anomalous-sounds)
+
+### 학습
+
+```bash
+cd software
+
+# 새로 학습
+python train.py --data_dir ../data --model_name my_model.pth --epochs 150 --batch_size 256
+
+# 이어서 학습 (epochs는 추가가 아닌 최종 목표 에포크)
+python train.py --data_dir ../data --model_name my_model.pth --epochs 300 --resume
+```
+
+| 옵션 | 설명 | 기본값 |
+|------|------|--------|
+| `--data_dir` | 데이터 최상위 폴더 (하위에 normal/, anomaly/ 필수) | 필수 |
+| `--model_name` | 저장/불러올 가중치 파일명 | `best_model.pth` |
+| `--epochs` | 최종 목표 에포크 수 | 150 |
+| `--resume` | 체크포인트에서 에포크·LR·가중치 이어서 학습 | False |
+| `--batch_size` | 배치 크기 | 256 |
+| `--lr` | 초기 학습률 (Cosine Annealing 적용) | 0.002 |
+| `--n_mels` | Mel 밴드 수 및 입력 채널 | 40 |
+| `--segment_ms` | 데이터 분할 단위 (ms) | 500 |
+
+### 순전파 동작 확인 (PyTorch 없이)
+
+```bash
+cd software
+python test_model_numpy.py
+```
+
+---
+
+## 하드웨어 (FPGA RTL)
+
+> **현재 상태**: `src_old/`에 구 설계(Level Crossing + LIF) 보존.  
+> 신규 설계(`src/`)는 Mel Spectrogram + PLIF-T 기반으로 작성 중.
+
+### 신규 RTL 설계 목표 (`hardware/src/`)
+
+| 항목 | 사양 |
+|------|------|
+| 타깃 보드 | Xilinx Artix-7 |
+| 입력 인터페이스 | `mel_in[40×8bit]` + `frame_valid` (RPi5에서 수신) |
+| 처리 방식 | 시분할(Time-Multiplexing), 162클럭/타임스텝 |
+| 가중치 저장 | BRAM (9,280 × INT8 ≈ 74Kbits) |
+| 막전위 형식 | 16-bit signed, Soft Reset |
+| 이상 판정 | Leaky Counter (`cnt_anomaly > cnt_normal`) |
+| 출력 | `anomaly_flag` (1-bit) |
+
+### 시뮬레이션
+
+```bash
+# iverilog 사용 예시
+iverilog -o sim hardware/testbench/tb_snn_top.v hardware/src/*.v
+vvp sim
+```
+
+---
+
+## 학습된 모델
+
+| 파일 | 데이터셋 | 비고 |
+|------|----------|------|
+| `best_model_mimii_v2-1.pth` | MIMII | **최고 성능, 권장** |
+| `best_model_mimii_v1-1.pth` | MIMII | v1 |
+| `best_model_dcase_v2-1.pth` | DCASE | |
+| `best_model_dcase_v1-1.pth` | DCASE | |
+
+---
+
+## 개발 현황
+
+### ✅ 완료
+
+- [x] PLIF-T SNN 모델 설계 (`snn_model.py`)
+- [x] 학습 루프 구현 — Focal Loss, Mixup, SpecAugment, Resume (`train.py`)
+- [x] NumPy 순전파 검증 스크립트 (`test_model_numpy.py`)
+- [x] MIMII / DCASE 데이터셋 학습 완료 (모델 4종)
+- [x] 구 RTL 설계 — Level Crossing + LIF (`hardware/src_old/`)
+
+---
+
+### 🔧 진행 중 — 신규 RTL (Mel Spectrogram + PLIF-T)
+
+**Phase 0 — 디렉토리 준비**
+- [ ] `hardware/src/` 폴더 생성
+
+**Phase 1 — 가중치·파라미터 추출**
+- [ ] `export_weights.py` — `best_model_mimii_v2-1.pth` → INT8 양자화
+- [ ] W1/W2/W3/β/V_th를 `$readmemh` 호환 hex 파일로 출력 (`hardware/src/weights/`)
+- [ ] `test_model_numpy.py` 수정 — INT8 가중치 기반 골든 벡터 저장
+
+**Phase 2 — 핵심 연산 모듈**
+- [ ] `plift_core.v` — PLIF-T 뉴런 (β·V_th 파라미터 입력, soft reset)
+- [ ] `mac_unit.v` — INT8×INT8→INT16 누적, 팬인 가변 (40/128/32)
+- [ ] `weight_bram.v` — 9,280×8bit BRAM 가중치 저장
+- [ ] `param_rom.v` — β(162개) + V_th(162개) INT8 ROM
+- [ ] `membrane_mem.v` — 162뉴런 막전위 16-bit BRAM
+- [ ] `spike_mem.v` — 레이어별 스파이크 임시 저장 (L1: 128bit, L2: 32bit)
+
+**Phase 3 — 제어·통합 모듈**
+- [ ] `control_fsm.v` — 3레이어 시퀀서 FSM (L1×128 → L2×32 → L3×2)
+- [ ] `anomaly_judge.v` — `src_old`에서 복사 (Leaky Counter, 수정 없음)
+- [ ] `snn_top.v` — 최상위 통합 (`mel_in[40×8bit]` + `frame_valid` → `anomaly_flag`)
+
+**Phase 4 — 검증 및 마무리**
+- [ ] `tb_plift_core.v` — PLIF-T 단일 뉴런 테스트벤치
+- [ ] `tb_snn_top.v` — 골든 벡터 기반 전체 시스템 RTL 시뮬레이션
+- [ ] iverilog 시뮬레이션 실행 및 `anomaly_flag` 출력 검증
+
+---
+
+## 참고 자료
+
+- [MIMII Dataset](https://zenodo.org/record/3384388) — Malfunctioning Industrial Machine Investigation and Inspection
+- [DCASE 2020 Task 2](https://dcase.community/challenge2020/task2-unsupervised-detection-of-anomalous-sounds) — Unsupervised Detection of Anomalous Sounds
+- [Parametric LIF (PLIF)](https://arxiv.org/abs/2011.09226) — Incorporating Learnable Membrane Time Constant to Enhance Learning of SNNs
