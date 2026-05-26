@@ -145,8 +145,8 @@ python test_model_numpy.py
 
 ## 하드웨어 (FPGA RTL)
 
-> **현재 상태**: Phase 4 완료 — 전체 RTL 구현 및 골든 벡터 검증 통과.  
-> Phase 5~9: SPI 인터페이스 + 듀얼채널 RTL → Vivado 합성 → RPi5 소프트웨어 → 데모.
+> **현재 상태**: Phase 5 완료 — 듀얼채널 + SPI 인터페이스 RTL 구현 및 검증 통과.  
+> Phase 6~9: Vivado 합성 → FPGA 구현 → RPi5 소프트웨어 → 데모.
 
 ### RTL 설계 사양 (`hardware/src/`)
 
@@ -172,6 +172,7 @@ python test_model_numpy.py
 | `phase2_tb.v` | Phase 2 핵심 모듈 6종 | 32 | `weights/*.hex` |
 | `phase3_tb.v` | Phase 3 control_fsm·snn_top | 57 | `weights/*.hex` |
 | `tb_snn_top.v` | 전체 시스템 골든 벡터 검증 | 312 | `weights/golden/*.hex` |
+| `tb_dual_snn_top.v` | 듀얼채널 + SPI (mode 0) 검증 | 314 | `weights/golden/*.hex` |
 
 #### A. VSCode 터미널 (iverilog)
 
@@ -201,6 +202,11 @@ mkdir -p hardware/sim
 /usr/bin/iverilog -g2001 -o hardware/sim/snn_top \
     hardware/testbench/tb_snn_top.v hardware/src/*.v
 /usr/bin/vvp hardware/sim/snn_top
+
+# Phase 5 — 듀얼채널 + SPI 인터페이스 검증
+/usr/bin/iverilog -g2001 -o hardware/sim/dual_snn_top \
+    hardware/testbench/tb_dual_snn_top.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/dual_snn_top
 ```
 
 #### B. Vivado (Windows / SMB Z:/ 마운트)
@@ -273,11 +279,11 @@ mkdir -p hardware/sim
 - [x] `tb_snn_top.v` — 골든 벡터 기반 전체 시뮬레이션 (312 TC)
   - Normal/Anomaly 각 31 타임스텝 × L3 막전위·스파이크·anomaly_flag bit-exact 일치
 
-**Phase 5 — 듀얼채널 RTL + SPI 인터페이스** ⬜ 예정
-- [ ] `spi_slave.v` — SPI 수신기 (CPOL=0, CPHA=0, 41바이트 패킷 디코더)
-- [ ] `dual_snn_top.v` — 2채널 최상위 (spi_slave + snn_top ×2 + 채널 디먹스)
-- [ ] `hardware/constraints/nexys_a7.xdc` — Nexys A7 100T 핀 할당
-- [ ] `testbench/tb_dual_snn_top.v` — SPI 시뮬레이션 + 2채널 골든 벡터 PASS
+**Phase 5 — 듀얼채널 RTL + SPI 인터페이스** ✅ 완료
+- [x] `spi_slave.v` — SPI 수신기 (CPOL=0, CPHA=0, 41바이트 패킷 디코더, 2단 CDC 동기화)
+- [x] `dual_snn_top.v` — 2채널 최상위 (spi_slave + snn_top ×2 + channel_id 디먹스)
+- [x] `hardware/constraints/nexys_a7.xdc` — Nexys A7 100T 핀 할당 (SPI=Pmod JA, LED0/1)
+- [x] `testbench/tb_dual_snn_top.v` — SPI mode 0 마스터 모사, ch0=anomaly·ch1=normal 골든 (314 TC 전체 통과)
 
 **Phase 6 — Vivado 합성 및 FPGA 구현** ⬜ 예정
 - [ ] Vivado 프로젝트 생성 (Top: `dual_snn_top`, target: xc7a100tcsg324-1)
