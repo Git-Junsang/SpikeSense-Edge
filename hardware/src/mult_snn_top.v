@@ -1,5 +1,5 @@
 // ============================================================
-// mt_snn_top.v — 다중 트랙 시분할 PLIF-T SNN 최상위 (Phase 6 확장)
+// mult_snn_top.v — 다중 트랙 시분할 PLIF-T SNN 최상위 (Phase 6 확장)
 // ============================================================
 // 단일 데이터패스(MAC·가중치 BRAM·param ROM·spike_mem)를 N_TRACKS개
 // 트랙이 시분할 공유. 트랙별 상태(막전위·이상 카운터)만 복제.
@@ -17,7 +17,7 @@
 
 `timescale 1ns/1ps
 
-module mt_snn_top #(
+module mult_snn_top #(
     parameter N_TRACKS = 64,
     parameter TRK_W    = 6     // ceil(log2(N_TRACKS))
 )(
@@ -31,7 +31,7 @@ module mt_snn_top #(
     output wire [N_TRACKS-1:0]  anomaly_flags,
     output wire                 busy,
 
-    // 관찰용 디버그 출력 (보드 self-test / ILA). mt_spi_top에선 미연결.
+    // 관찰용 디버그 출력 (보드 self-test / ILA). mult_spi_top에선 미연결.
     output wire                 dbg_spk_normal,   // 현재 트랙 L3 n0(정상) 스파이크
     output wire                 dbg_spk_anomaly,  // 현재 트랙 L3 n1(이상) 스파이크
     output wire                 dbg_ts_done       // 타임스텝 완료(ts_done_r)
@@ -55,7 +55,7 @@ module mt_snn_top #(
     wire [TRK_W-1:0] cur_track;
     wire ts_done_comb, buf_done;
 
-    control_fsm_mt #(.TS_TOTAL(31), .N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_fsm (
+    control_fsm_mult #(.TS_TOTAL(31), .N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_fsm (
         .clk(clk), .rst_n(rst_n),
         .frame_valid(frame_valid), .track_id(track_id),
         .layer(layer), .neuron_cnt(neuron_cnt), .fan_cnt(fan_cnt),
@@ -123,7 +123,7 @@ module mt_snn_top #(
     wire signed [15:0] mem_rd;
     wire signed [15:0] mem_new_plif;
 
-    membrane_mem_mt #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_mem (
+    membrane_mem_mult #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_mem (
         .clk(clk),
         .rd_track(cur_track), .rd_neuron(neuron_global), .rd_data(mem_rd),
         .wr_en(mem_wr_en), .wr_track(cur_track), .wr_neuron(neuron_global),
@@ -153,7 +153,7 @@ module mt_snn_top #(
     );
 
     // =========================================================
-    // L3 스파이크 캡처 → anomaly_judge_mt
+    // L3 스파이크 캡처 → anomaly_judge_mult
     // =========================================================
     reg spk_normal_r, spk_anomaly_r;
     always @(posedge clk or negedge rst_n) begin
@@ -178,7 +178,7 @@ module mt_snn_top #(
         end
     end
 
-    anomaly_judge_mt #(.CNT_WIDTH(24), .SHIFT_N(14), .N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_judge (
+    anomaly_judge_mult #(.CNT_WIDTH(24), .SHIFT_N(14), .N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_judge (
         .clk(clk), .rst_n(rst_n),
         .track(cur_track_r),
         .spk_normal(spk_normal_r), .spk_anomaly(spk_anomaly_r),

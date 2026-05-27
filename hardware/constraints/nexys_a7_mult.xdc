@@ -1,6 +1,6 @@
 ## ============================================================
-## nexys_a7_mt.xdc — Nexys A7 100T (XC7A100T-CSG324) 핀 제약
-## Top module: mt_spi_top  (다중 트랙 시분할, 50 MHz)
+## nexys_a7_mult.xdc — Nexys A7 100T (XC7A100T-CSG324) 핀 제약
+## Top module: mult_spi_top  (다중 트랙 시분할, 50 MHz)
 ## ============================================================
 ## 배선 (RPi5 ↔ FPGA, Pmod JA):
 ##   RPi5 GPIO11 (SCLK) → JA1 ,  GPIO10 (MOSI) → JA2 ,  GPIO8 (CE0) → JA3

@@ -1,6 +1,6 @@
 ## ============================================================
 ## nexys_a7_selftest.xdc — Nexys A7 100T 자가진단 핀 제약
-## Top module: mt_selftest_top  (RPi/SPI 불필요, 50 MHz)
+## Top module: mult_selftest_top  (RPi/SPI 불필요, 50 MHz)
 ## ============================================================
 ## 보드를 굽고 리셋만 하면 ~6ms 후 결과 표시:
 ##   LED15 = PASS, LED14 = FAIL, LED13 = done, LED[6:0] = 불일치 수

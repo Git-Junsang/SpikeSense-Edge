@@ -1,12 +1,12 @@
 // ============================================================
-// mt_spi_top.v — 다중 트랙 시분할 SNN 보드 최상위 (Phase 6-2)
+// mult_spi_top.v — 다중 트랙 시분할 SNN 보드 최상위 (Phase 6-2)
 // ============================================================
 // 신호 흐름:
 //   RPi5 (USB mic ×N)
 //     → SPI 41B 패킷 [track_id][mel×40]  (dual과 동일 포맷, channel_id=track_id)
 //     → clk_div2: 100MHz → 50MHz (시분할 SNN 동작 클럭)
 //     → spi_slave (50MHz 도메인, 10MHz SCK 5× 오버샘플)
-//     → mt_snn_top (단일 데이터패스 시분할, 트랙별 막전위·이상카운터)
+//     → mult_snn_top (단일 데이터패스 시분할, 트랙별 막전위·이상카운터)
 //     → anomaly_flags[N_TRACKS] → 하위 16비트를 LED로 표시
 //
 // SPI 포맷·spi_slave는 dual과 동일(검증 완료). channel_id를 track_id로
@@ -17,7 +17,7 @@
 
 `timescale 1ns/1ps
 
-module mt_spi_top #(
+module mult_spi_top #(
     parameter N_TRACKS = 64,
     parameter TRK_W    = 6,    // ceil(log2(N_TRACKS))
     parameter N_LED    = 16    // 표시할 트랙 수 (Nexys A7 LED 16개)
@@ -65,7 +65,7 @@ module mt_spi_top #(
     wire [N_TRACKS-1:0] anomaly_flags;
     wire                busy;
 
-    mt_snn_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_mt (
+    mult_snn_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_mult (
         .clk(clk50), .rst_n(rst_n),
         .mel_in(mel_bus), .frame_valid(frame_valid), .track_id(track_id),
         .anomaly_flags(anomaly_flags), .busy(busy)

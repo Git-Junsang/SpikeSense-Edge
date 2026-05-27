@@ -1,5 +1,5 @@
 // ============================================================
-// tb_mt_snn_top.v — 다중 트랙 시분할 SNN 검증 (Phase 6 확장)
+// tb_mult_snn_top.v — 다중 트랙 시분할 SNN 검증 (Phase 6 확장)
 // ============================================================
 // 검증 전략 (시분할 격리성 + bit-exact 정확도):
 //   4개 트랙에 골든 패턴을 배정: track0=normal, track1=anomaly,
@@ -9,14 +9,14 @@
 //   → 트랙 간 상태 격리 + 단일채널 등가성 동시 증명.
 //
 // 실행:
-//   /usr/bin/iverilog -g2001 -o hardware/sim/mt_snn_top \
-//       hardware/testbench/tb_mt_snn_top.v hardware/src/*.v
-//   /usr/bin/vvp hardware/sim/mt_snn_top
+//   /usr/bin/iverilog -g2001 -o hardware/sim/mult_snn_top \
+//       hardware/testbench/tb_mult_snn_top.v hardware/src/*.v
+//   /usr/bin/vvp hardware/sim/mult_snn_top
 // ============================================================
 
 `timescale 1ns/1ps
 
-module tb_mt_snn_top;
+module tb_mult_snn_top;
 
 localparam N_TRACKS = 4;
 localparam TRK_W    = 2;
@@ -37,7 +37,7 @@ reg  [TRK_W-1:0] track_id = 0;
 wire [N_TRACKS-1:0] anomaly_flags;
 wire         busy;
 
-mt_snn_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) dut (
+mult_snn_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) dut (
     .clk(clk), .rst_n(rst_n),
     .mel_in(mel_in), .frame_valid(frame_valid), .track_id(track_id),
     .anomaly_flags(anomaly_flags), .busy(busy)
@@ -158,7 +158,7 @@ initial begin
 
     $display("");
     $display("============================================");
-    $display("  tb_mt_snn_top — 다중 트랙 시분할 검증 (N=%0d)", N_TRACKS);
+    $display("  tb_mult_snn_top — 다중 트랙 시분할 검증 (N=%0d)", N_TRACKS);
     $display("  트랙 패턴: t0=norm t1=anom t2=norm t3=anom");
     $display("============================================");
 

@@ -1,21 +1,21 @@
 // ============================================================
-// tb_mt_spi_top.v — SPI 통합 다중 트랙 시분할 검증 (Phase 6-2)
+// tb_mult_spi_top.v — SPI 통합 다중 트랙 시분할 검증 (Phase 6-2)
 // ============================================================
 // 전 경로 검증: clk_div2(100→50MHz) → spi_slave → channel_id=track_id
-//   디먹스 → mt_snn_top.
+//   디먹스 → mult_snn_top.
 // SPI 마스터(mode 0, SCK 5MHz)로 41B 프레임을 보내고, 각 트랙의 L3
 // 막전위가 해당 패턴의 단일채널 골든과 일치하는지 확인.
 //   track0=normal, track1=anomaly, ts0·ts1 전송 → 트랙별 영역 격리·지속 검증.
 //
 // 실행:
-//   /usr/bin/iverilog -g2001 -o hardware/sim/mt_spi_top \
-//       hardware/testbench/tb_mt_spi_top.v hardware/src/*.v
-//   /usr/bin/vvp hardware/sim/mt_spi_top
+//   /usr/bin/iverilog -g2001 -o hardware/sim/mult_spi_top \
+//       hardware/testbench/tb_mult_spi_top.v hardware/src/*.v
+//   /usr/bin/vvp hardware/sim/mult_spi_top
 // ============================================================
 
 `timescale 1ns/1ps
 
-module tb_mt_spi_top;
+module tb_mult_spi_top;
 
 localparam N_TRACKS = 4;
 localparam TRK_W    = 2;
@@ -28,7 +28,7 @@ reg rst_n = 0;
 reg sck = 0, mosi = 0, cs_n = 1;
 wire [15:0] led;
 
-mt_spi_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W), .N_LED(16)) dut (
+mult_spi_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W), .N_LED(16)) dut (
     .clk(clk), .rst_n(rst_n),
     .sck(sck), .mosi(mosi), .cs_n(cs_n),
     .led(led)
@@ -69,9 +69,9 @@ endtask
 task wait_proc;
     begin
         timeout = 0;
-        while (!dut.u_mt.busy && timeout < 4000) begin #20; timeout = timeout + 1; end
+        while (!dut.u_mult.busy && timeout < 4000) begin #20; timeout = timeout + 1; end
         timeout = 0;
-        while (dut.u_mt.busy && timeout < 30000) begin #20; timeout = timeout + 1; end
+        while (dut.u_mult.busy && timeout < 30000) begin #20; timeout = timeout + 1; end
         if (timeout >= 30000) begin $display("  TIMEOUT"); $finish; end
         #100;
     end
@@ -87,8 +87,8 @@ task check_track;
         exp_m0 = is_anom ? gv_a_mem[ts*2]   : gv_n_mem[ts*2];
         exp_m1 = is_anom ? gv_a_mem[ts*2+1] : gv_n_mem[ts*2+1];
         base   = trk*256;
-        got_m0 = dut.u_mt.u_mem.mem[base+160];
-        got_m1 = dut.u_mt.u_mem.mem[base+161];
+        got_m0 = dut.u_mult.u_mem.mem[base+160];
+        got_m1 = dut.u_mult.u_mem.mem[base+161];
         if (got_m0 === exp_m0) pass_n = pass_n + 1;
         else begin fail_n = fail_n + 1;
             $display("  FAIL trk%0d ts%0d %s n0 got=0x%h exp=0x%h", trk, ts, is_anom?"anom":"norm", got_m0, exp_m0); end
@@ -106,7 +106,7 @@ initial begin
 
     $display("");
     $display("============================================");
-    $display("  tb_mt_spi_top — SPI 통합 시분할 검증");
+    $display("  tb_mult_spi_top — SPI 통합 시분할 검증");
     $display("  ch0→track0(normal), ch1→track1(anomaly)");
     $display("============================================");
 

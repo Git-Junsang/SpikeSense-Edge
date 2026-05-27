@@ -68,7 +68,9 @@ SpikeSense-Edge/
 │   ├── train.py                # 학습 루프 (Focal Loss, Mixup, Resume 지원)
 │   ├── test_model_numpy.py     # NumPy 순전파 검증 (PyTorch 불필요)
 │   ├── export_weights.py       # INT8 가중치 추출 → hex 파일
-│   └── best_model_mimii_v2-1.pth  # 최고 성능 모델 (MIMII 데이터셋)
+│   ├── best_model_mimii_v2-1.pth  # 최고 성능 모델 (MIMII 데이터셋)
+│   ├── data_dcase/             # 정식 학습 데이터 (DCASE — normal/, anomaly/)
+│   └── data_mimii/             # 경량 검증 데이터 (MIMII)
 │
 ├── hardware/
 │   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 4 완료)
@@ -85,8 +87,6 @@ SpikeSense-Edge/
 │   ├── main.py                 # 메인 루프 (2채널 파이프라인)
 │   └── demo.py                 # 터미널 UI 데모
 │
-├── data/                       # 정식 학습 데이터 (normal/, anomaly/)
-├── data_sub/                   # 경량 검증 데이터
 └── CLAUDE.md                   # AI 코딩 보조 가이드
 ```
 
@@ -103,7 +103,7 @@ pip install torch numpy librosa soundfile scikit-learn
 ### 데이터 준비
 
 ```
-data/
+data_dcase/
 ├── normal/     # 정상 작동 WAV 파일 (16kHz 권장)
 └── anomaly/    # 이상 작동 WAV 파일
 ```
@@ -116,10 +116,10 @@ data/
 cd software
 
 # 새로 학습
-python train.py --data_dir ../data --model_name my_model.pth --epochs 150 --batch_size 256
+python train.py --data_dir data_dcase --model_name my_model.pth --epochs 150 --batch_size 256
 
 # 이어서 학습 (epochs는 추가가 아닌 최종 목표 에포크)
-python train.py --data_dir ../data --model_name my_model.pth --epochs 300 --resume
+python train.py --data_dir data_dcase --model_name my_model.pth --epochs 300 --resume
 ```
 
 | 옵션 | 설명 | 기본값 |
@@ -146,7 +146,7 @@ python test_model_numpy.py
 
 > **현재 상태**: **Phase 6 완료** — 100MHz 타이밍 미달(WNS −5.498ns)을 **다중 트랙 시분할(TDM) @50MHz**로 해결.  
 > 단일 데이터패스를 N트랙이 공유(트랙별 막전위·이상카운터만 복제). 50MHz 합성·구현·비트스트림 완주 → **WNS +4.072ns(타이밍 닫힘)**, LUT 2,033·FF 4,605·BRAM36 12·DSP 1.  
-> 검증: iverilog(tb_mt_snn_top 496/496, tb_mt_spi_top 8/8, tb_mt_selftest PASS) + **보드 자가진단(mt_selftest_top) 실리콘 PASS** — RPi 없이 골든 입력으로 LED15 점등 확인.  
+> 검증: iverilog(tb_mult_snn_top 496/496, tb_mult_spi_top 8/8, tb_mult_selftest PASS) + **보드 자가진단(mult_selftest_top) 실리콘 PASS** — RPi 없이 골든 입력으로 LED15 점등 확인.  
 > ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시).  
 > Phase 7~9: RPi5 소프트웨어(다중트랙 track_id) → 통합 → 데모.
 
@@ -176,9 +176,9 @@ python test_model_numpy.py
 | `phase3_tb.v` | Phase 3 control_fsm·snn_top | 57 | `weights/*.hex` |
 | `tb_snn_top.v` | 전체 시스템 골든 벡터 검증 | 312 | `weights/golden/*.hex` |
 | `tb_dual_snn_top.v` | 듀얼채널 + SPI (mode 0) 검증 | 314 | `weights/golden/*.hex` |
-| `tb_mt_snn_top.v` | 다중 트랙 시분할 코어 (4트랙 인터리빙 골든) | 496 | `weights/golden/*.hex` |
-| `tb_mt_spi_top.v` | SPI 통합 시분할 (clk분주 + track 디먹스) | 8 | `weights/golden/*.hex` |
-| `tb_mt_selftest.v` | 보드 자가진단(mt_selftest_top) 시뮬 — 골든 스파이크 62개 자체 비교 → LED15=PASS | PASS/FAIL | `weights/golden/*.hex` |
+| `tb_mult_snn_top.v` | 다중 트랙 시분할 코어 (4트랙 인터리빙 골든) | 496 | `weights/golden/*.hex` |
+| `tb_mult_spi_top.v` | SPI 통합 시분할 (clk분주 + track 디먹스) | 8 | `weights/golden/*.hex` |
+| `tb_mult_selftest.v` | 보드 자가진단(mult_selftest_top) 시뮬 — 골든 스파이크 62개 자체 비교 → LED15=PASS | PASS/FAIL | `weights/golden/*.hex` |
 
 #### A. VSCode 터미널 (iverilog)
 
@@ -215,18 +215,18 @@ mkdir -p hardware/sim
 /usr/bin/vvp hardware/sim/dual_snn_top
 
 # Phase 6-2 — 다중 트랙 시분할 (50MHz): 코어 골든 검증
-/usr/bin/iverilog -g2001 -o hardware/sim/mt_snn_top \
-    hardware/testbench/tb_mt_snn_top.v hardware/src/*.v
-/usr/bin/vvp hardware/sim/mt_snn_top
+/usr/bin/iverilog -g2001 -o hardware/sim/mult_snn_top \
+    hardware/testbench/tb_mult_snn_top.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/mult_snn_top
 # Phase 6-2 — SPI 통합(clk분주 + track 디먹스) 검증
-/usr/bin/iverilog -g2001 -o hardware/sim/mt_spi_top \
-    hardware/testbench/tb_mt_spi_top.v hardware/src/*.v
-/usr/bin/vvp hardware/sim/mt_spi_top
+/usr/bin/iverilog -g2001 -o hardware/sim/mult_spi_top \
+    hardware/testbench/tb_mult_spi_top.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/mult_spi_top
 
-# Phase 6-2 — 보드 자가진단(mt_selftest_top) 시뮬 (RPi 없이 LED15=PASS)
-/usr/bin/iverilog -g2001 -o hardware/sim/mt_selftest \
-    hardware/testbench/tb_mt_selftest.v hardware/src/*.v
-/usr/bin/vvp hardware/sim/mt_selftest
+# Phase 6-2 — 보드 자가진단(mult_selftest_top) 시뮬 (RPi 없이 LED15=PASS)
+/usr/bin/iverilog -g2001 -o hardware/sim/mult_selftest \
+    hardware/testbench/tb_mult_selftest.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/mult_selftest
 ```
 
 #### B. Vivado (Windows / SMB Z:/ 마운트)
@@ -302,7 +302,7 @@ mkdir -p hardware/sim
 **Phase 5 — 듀얼채널 RTL + SPI 인터페이스** ✅ 완료
 - [x] `spi_slave.v` — SPI 수신기 (CPOL=0, CPHA=0, 41바이트 패킷 디코더, 2단 CDC 동기화)
 - [x] `dual_snn_top.v` — 2채널 최상위 (spi_slave + snn_top ×2 + channel_id 디먹스)
-- [x] `hardware/constraints/nexys_a7.xdc` — Nexys A7 100T 핀 할당 (SPI=Pmod JA, LED0/1)
+- [x] `hardware/constraints/nexys_a7_dual.xdc` — Nexys A7 100T 핀 할당 (SPI=Pmod JA, LED0/1)
 - [x] `testbench/tb_dual_snn_top.v` — SPI mode 0 마스터 모사, ch0=anomaly·ch1=normal 골든 (314 TC 전체 통과)
 
 **Phase 6-1 — Vivado 합성 및 FPGA 구현 (듀얼채널)** ✅ 완료
@@ -314,15 +314,15 @@ mkdir -p hardware/sim
 
 **Phase 6-2 — 다중 트랙 시분할(TDM) @50MHz** ✅ 완료
 - 단일 데이터패스(MAC·weight BRAM·param ROM·spike_mem)를 **N_TRACKS개 트랙이 시분할 공유**, 트랙별 상태(막전위·이상카운터)만 복제. 50MHz에서 임계경로 15.3ns < 20ns 여유. (복제 ~30트랙 한계 대비, 시분할 ~165트랙@50MHz)
-- [x] `membrane_mem_mt.v` — 트랙당 256스트라이드 BRAM, 동기읽기 (first_ts 마스킹으로 버퍼리셋)
-- [x] `anomaly_judge_mt.v` — 트랙별 Leaky Counter
-- [x] `control_fsm_mt.v` — track_id·트랙별 ts 카운터·first_ts (snn_top/dual_snn_top 동결, 신규)
-- [x] `mt_snn_top.v` — 시분할 SNN 엔진, `clk_div2.v` — 100→50MHz 2분주
-- [x] `mt_spi_top.v` — 보드 최상위 (clk분주 + spi_slave + channel_id=track_id 디먹스 → LED[0..15])
-- [x] `tb_mt_snn_top.v` (496 TC, 4트랙 인터리빙 bit-exact) / `tb_mt_spi_top.v` (8 TC, SPI 통합)
-- [x] Vivado 자동화 ([create_project_mt.tcl](hardware/fpga/create_project_mt.tcl), Top `mt_spi_top`) + [nexys_a7_mt.xdc](hardware/constraints/nexys_a7_mt.xdc) (50MHz 생성클럭)
+- [x] `membrane_mem_mult.v` — 트랙당 256스트라이드 BRAM, 동기읽기 (first_ts 마스킹으로 버퍼리셋)
+- [x] `anomaly_judge_mult.v` — 트랙별 Leaky Counter
+- [x] `control_fsm_mult.v` — track_id·트랙별 ts 카운터·first_ts (snn_top/dual_snn_top 동결, 신규)
+- [x] `mult_snn_top.v` — 시분할 SNN 엔진, `clk_div2.v` — 100→50MHz 2분주
+- [x] `mult_spi_top.v` — 보드 최상위 (clk분주 + spi_slave + channel_id=track_id 디먹스 → LED[0..15])
+- [x] `tb_mult_snn_top.v` (496 TC, 4트랙 인터리빙 bit-exact) / `tb_mult_spi_top.v` (8 TC, SPI 통합)
+- [x] Vivado 자동화 ([create_project_mult.tcl](hardware/fpga/create_project_mult.tcl), Top `mult_spi_top`) + [nexys_a7_mult.xdc](hardware/constraints/nexys_a7_mult.xdc) (50MHz 생성클럭)
 - [x] **50MHz 합성·구현·비트스트림 완주** (Vivado 2025.2): **WNS +4.072ns**(타이밍 닫힘), **LUT 2,033 / FF 4,605 / BRAM36 12 / DSP 1** (듀얼 대비 LUT·FF·DSP↓, 막전위 BRAM↑). 0 Warnings.
-- [x] **보드 자가진단** — [mt_selftest_top.v](hardware/src/mt_selftest_top.v) + [create_project_selftest.tcl](hardware/fpga/create_project_selftest.tcl): RPi 없이 칩 안 골든 anomaly로 출력 스파이크 62개 자체 비교 → **실제 보드 PASS (LED15 점등)**. iverilog [tb_mt_selftest.v](hardware/testbench/tb_mt_selftest.v)로도 PASS 확인. `mt_snn_top`에 관찰용 `dbg_*` 출력 추가(mt_spi_top 미연결).
+- [x] **보드 자가진단** — [mult_selftest_top.v](hardware/src/mult_selftest_top.v) + [create_project_selftest.tcl](hardware/fpga/create_project_selftest.tcl): RPi 없이 칩 안 골든 anomaly로 출력 스파이크 62개 자체 비교 → **실제 보드 PASS (LED15 점등)**. iverilog [tb_mult_selftest.v](hardware/testbench/tb_mult_selftest.v)로도 PASS 확인. `mult_snn_top`에 관찰용 `dbg_*` 출력 추가(mult_spi_top 미연결).
 
 **Phase 7 — RPi5 소프트웨어** ⬜ 예정
 > ⚠️ 시분할 다중트랙이므로 SPI 패킷 첫 바이트에 **track_id(0~N-1)** 를 실어야 함 (포맷 41B 동일, 기존 2채널 0/1 → N트랙 확장).

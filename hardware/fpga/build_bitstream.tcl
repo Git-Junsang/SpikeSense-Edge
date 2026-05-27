@@ -20,7 +20,7 @@ set script_dir [file normalize [file dirname [info script]]]
 set repo  [file normalize "$script_dir/../.."]
 set src   "$repo/hardware/src"
 set wt    "$src/weights"
-set xdc   "$repo/hardware/constraints/nexys_a7.xdc"
+set xdc   "$repo/hardware/constraints/nexys_a7_dual.xdc"
 set build "$script_dir/build"
 set part  "xc7a100tcsg324-1"
 

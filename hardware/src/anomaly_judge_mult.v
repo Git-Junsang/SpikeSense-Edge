@@ -1,5 +1,5 @@
 // ============================================================
-// anomaly_judge_mt.v — 다중 트랙 Leaky Counter 이상 판정 (시분할용)
+// anomaly_judge_mult.v — 다중 트랙 Leaky Counter 이상 판정 (시분할용)
 // ============================================================
 // 단일채널 anomaly_judge.v의 다중 트랙 확장판.
 // 트랙별 (cnt_normal, cnt_anomaly) 카운터를 유지.
@@ -13,7 +13,7 @@
 
 `timescale 1ns/1ps
 
-module anomaly_judge_mt #(
+module anomaly_judge_mult #(
     parameter CNT_WIDTH = 24,
     parameter SHIFT_N   = 14,
     parameter N_TRACKS  = 64,

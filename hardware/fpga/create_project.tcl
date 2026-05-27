@@ -27,18 +27,18 @@ if { [lsearch -exact $argv "run"] >= 0 } { set ::run_flow 1 }
 set script_dir [file normalize [file dirname [info script]]]
 set repo_root  [file normalize "$script_dir/../.."]
 
-set proj_name  "vivado_spikehw"
-# 프로젝트는 저장소 안(hardware/fpga/vivado_spikehw)에 생성된다.
+set proj_name  "vivado_spikehw_dual"
+# 프로젝트는 저장소 안(hardware/fpga/vivado_spikehw_dual)에 생성된다.
 # ⚠️ 단, 저장소 경로는 반드시 ASCII여야 한다. 경로에 한글(비-ASCII)이 있으면
 #   합성 run(별도 프로세스 spawn)이 elaboration 직후 무에러로 크래시한다
 #   (Vivado는 프로젝트/run 경로에 ASCII만 공식 지원). 공백은 아래 add_files/
 #   read_xdc처럼 [list]로 감싸면 처리되지만, 한글은 폴더명 자체를 ASCII로 바꿔야 한다.
-set proj_dir   "$repo_root/hardware/fpga/vivado_spikehw"
+set proj_dir   "$repo_root/hardware/fpga/vivado_spikehw_dual"
 set part       "xc7a100tcsg324-1"
 
 set src_dir    "$repo_root/hardware/src"
 set wt_dir      "$src_dir/weights"
-set xdc_file   "$repo_root/hardware/constraints/nexys_a7.xdc"
+set xdc_file   "$repo_root/hardware/constraints/nexys_a7_dual.xdc"
 set tb_file    "$repo_root/hardware/testbench/tb_dual_snn_top.v"
 
 puts "INFO: repo_root  = $repo_root"
@@ -68,7 +68,7 @@ add_files -fileset constrs_1 -norecurse [list $xdc_file]
 # XDC는 구현(implementation) 전용으로 표시 — 합성에서 제외(표준 관행).
 # 핀/IOSTANDARD/타이밍 제약은 합성엔 불필요하고 구현에서만 쓰면 된다.
 # (타이밍 구동 합성을 원하면 아래 set_property 줄을 지워 XDC를 합성에도 쓰면 됨)
-set _xdc_obj [get_files -quiet *nexys_a7.xdc]
+set _xdc_obj [get_files -quiet *nexys_a7_dual.xdc]
 if { $_xdc_obj ne "" } {
     set_property used_in_synthesis false $_xdc_obj
 }

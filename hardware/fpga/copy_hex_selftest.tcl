@@ -1,7 +1,7 @@
 # ============================================================
 # copy_hex_selftest.tcl — self-test 합성 PRE-hook
 # ============================================================
-# mt_selftest_top은 가중치(w/beta/vth)에 더해 골든(anomaly_mel/spk)도
+# mult_selftest_top은 가중치(w/beta/vth)에 더해 골든(anomaly_mel/spk)도
 # $readmemh basename으로 읽으므로, 합성 직전 7개 hex를 모두 run cwd(및
 # synth_1 run 디렉토리)로 복사한다. (create_project_selftest.tcl에서 등록)
 # ============================================================

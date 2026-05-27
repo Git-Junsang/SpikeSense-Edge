@@ -1,8 +1,8 @@
 // ============================================================
-// mt_selftest_top.v — RPi 없이 보드에서 도는 자가진단 (Phase 6-2)
+// mult_selftest_top.v — RPi 없이 보드에서 도는 자가진단 (Phase 6-2)
 // ============================================================
 // 외부 자극원(RPi/SPI) 없이, 칩 안에 저장한 골든 anomaly mel을 시분할
-// 엔진(mt_snn_top)에 31타임스텝 먹이고, 출력 스파이크가 골든 기대값과
+// 엔진(mult_snn_top)에 31타임스텝 먹이고, 출력 스파이크가 골든 기대값과
 // 일치하는지 칩 안에서 자체 비교한다.
 //   - LED15 = PASS (62개 스파이크 전부 일치)
 //   - LED14 = FAIL,  LED13 = done,  LED[6:0] = 불일치 개수
@@ -14,7 +14,7 @@
 
 `timescale 1ns/1ps
 
-module mt_selftest_top (
+module mult_selftest_top (
     input  wire        clk,    // 100 MHz 입력 (E3)
     input  wire        rst_n,  // CPU_RESETN (C12, active-low)
     output reg  [15:0] led
@@ -43,7 +43,7 @@ module mt_selftest_top (
     wire [1:0]   anomaly_flags;
     wire         busy, dbg_spk_normal, dbg_spk_anomaly, dbg_ts_done;
 
-    mt_snn_top #(.N_TRACKS(2), .TRK_W(1)) u_eng (
+    mult_snn_top #(.N_TRACKS(2), .TRK_W(1)) u_eng (
         .clk(clk50), .rst_n(rst_n),
         .mel_in(mel_in), .frame_valid(frame_valid), .track_id(1'b0),
         .anomaly_flags(anomaly_flags), .busy(busy),

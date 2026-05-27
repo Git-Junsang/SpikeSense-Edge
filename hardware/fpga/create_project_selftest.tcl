@@ -1,14 +1,14 @@
 # ============================================================
 # create_project_selftest.tcl — Phase 6-2 보드 자가진단 (RPi 불필요)
 # ============================================================
-# 대상 : Nexys A7-100T (xc7a100tcsg324-1), Top = mt_selftest_top (50 MHz)
+# 대상 : Nexys A7-100T (xc7a100tcsg324-1), Top = mult_selftest_top (50 MHz)
 # 실행 :
 #   vivado -mode batch -source create_project_selftest.tcl -tclargs run
 #   (GUI Tcl Console: set ::run_flow 1 ; source {.../create_project_selftest.tcl})
 # ------------------------------------------------------------
-# create_project_mt.tcl와 동일 구조. 차이: Top=mt_selftest_top,
+# create_project_mult.tcl와 동일 구조. 차이: Top=mult_selftest_top,
 # XDC=nexys_a7_selftest.xdc, PRE훅=copy_hex_selftest.tcl(가중치+골든 hex),
-# bit=mt_selftest_top.bit.
+# bit=mult_selftest_top.bit.
 # 보드를 굽고 리셋하면 ~6ms 후 LED15=PASS / LED14=FAIL / LED13=done.
 # ============================================================
 
@@ -32,11 +32,11 @@ puts "INFO: proj_dir  = $proj_dir"
 
 create_project $proj_name $proj_dir -part $part -force
 
-# ---- RTL 소스 전체 + Top=mt_selftest_top ----
+# ---- RTL 소스 전체 + Top=mult_selftest_top ----
 foreach f [glob "$src_dir/*.v"] {
     add_files -norecurse [list $f]
 }
-set_property top mt_selftest_top [get_filesets sources_1]
+set_property top mult_selftest_top [get_filesets sources_1]
 
 # ---- 가중치 + 골든 hex 등록 (basename 탐색용) ----
 foreach f [glob "$wt_dir/*.hex"] { add_files -norecurse [list $f] }
@@ -77,6 +77,6 @@ if { $::run_flow } {
     }
     open_run impl_1
     report_timing_summary -delay_type min_max -max_paths 1
-    set bit "$proj_dir/$proj_name.runs/impl_1/mt_selftest_top.bit"
+    set bit "$proj_dir/$proj_name.runs/impl_1/mult_selftest_top.bit"
     puts "INFO: 비트스트림 → $bit"
 }

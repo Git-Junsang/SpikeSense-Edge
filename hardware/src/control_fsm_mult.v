@@ -1,5 +1,5 @@
 // ============================================================
-// control_fsm_mt.v — 다중 트랙 시분할 PLIF-T SNN 시퀀서 FSM
+// control_fsm_mult.v — 다중 트랙 시분할 PLIF-T SNN 시퀀서 FSM
 // ============================================================
 // control_fsm.v의 다중 트랙 확장판.
 //   - frame_valid + track_id로 한 프레임(=한 타임스텝)을 처리
@@ -15,7 +15,7 @@
 
 `timescale 1ns/1ps
 
-module control_fsm_mt #(
+module control_fsm_mult #(
     parameter TS_TOTAL = 31,
     parameter N_TRACKS = 64,
     parameter TRK_W    = 6

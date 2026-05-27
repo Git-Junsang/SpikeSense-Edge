@@ -1,25 +1,25 @@
 // ============================================================
-// tb_mt_selftest.v — 보드 자가진단(mt_selftest_top) 시뮬 검증
+// tb_mult_selftest.v — 보드 자가진단(mult_selftest_top) 시뮬 검증
 // ============================================================
 // 보드에 굽기 전, 자가진단 로직이 골든 입력에 대해 PASS(LED15)를
 // 내는지 iverilog로 확인한다. led[13]=done 대기 후 led[15]=PASS 검사.
 //
 // 실행:
-//   /usr/bin/iverilog -g2001 -o hardware/sim/mt_selftest \
-//       hardware/testbench/tb_mt_selftest.v hardware/src/*.v
-//   /usr/bin/vvp hardware/sim/mt_selftest
+//   /usr/bin/iverilog -g2001 -o hardware/sim/mult_selftest \
+//       hardware/testbench/tb_mult_selftest.v hardware/src/*.v
+//   /usr/bin/vvp hardware/sim/mult_selftest
 // ============================================================
 
 `timescale 1ns/1ps
 
-module tb_mt_selftest;
+module tb_mult_selftest;
 
 reg clk = 0;
 always #5 clk = ~clk;          // 100 MHz 입력
 reg rst_n = 0;
 wire [15:0] led;
 
-mt_selftest_top dut (.clk(clk), .rst_n(rst_n), .led(led));
+mult_selftest_top dut (.clk(clk), .rst_n(rst_n), .led(led));
 
 integer cyc = 0;
 
@@ -36,7 +36,7 @@ initial begin
 
     $display("");
     $display("============================================");
-    $display("  tb_mt_selftest — 보드 자가진단 시뮬");
+    $display("  tb_mult_selftest — 보드 자가진단 시뮬");
     $display("============================================");
     if (led[13] !== 1'b1) begin
         $display("  NG  done 미도달 (timeout, cyc=%0d)", cyc);
