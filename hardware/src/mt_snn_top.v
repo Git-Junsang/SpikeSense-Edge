@@ -29,7 +29,12 @@ module mt_snn_top #(
     input  wire [TRK_W-1:0]     track_id,
 
     output wire [N_TRACKS-1:0]  anomaly_flags,
-    output wire                 busy
+    output wire                 busy,
+
+    // 관찰용 디버그 출력 (보드 self-test / ILA). mt_spi_top에선 미연결.
+    output wire                 dbg_spk_normal,   // 현재 트랙 L3 n0(정상) 스파이크
+    output wire                 dbg_spk_anomaly,  // 현재 트랙 L3 n1(이상) 스파이크
+    output wire                 dbg_ts_done       // 타임스텝 완료(ts_done_r)
 );
 
     // =========================================================
@@ -180,5 +185,10 @@ module mt_snn_top #(
         .update(ts_done_r),
         .anomaly_flags(anomaly_flags)
     );
+
+    // 디버그 탭 (내부 레지스터 노출)
+    assign dbg_spk_normal  = spk_normal_r;
+    assign dbg_spk_anomaly = spk_anomaly_r;
+    assign dbg_ts_done     = ts_done_r;
 
 endmodule

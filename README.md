@@ -74,9 +74,8 @@ SpikeSense-Edge/
 │   ├── src/                    # 신규 RTL — Mel + PLIF-T (Phase 4 완료)
 │   │   └── weights/            # INT8 가중치 hex + 골든 벡터
 │   ├── constraints/            # Vivado XDC 핀 제약 (Phase 5~6)
-│   ├── src_old/                # 구 RTL — Level Crossing + LIF (보존)
-│   ├── testbench/              # 신규 테스트벤치 .v 소스
-│   ├── testbench_old/          # 구 RTL 테스트벤치 (보존)
+│   ├── fpga/                   # Vivado 프로젝트 자동화 tcl
+│   ├── testbench/              # 테스트벤치 .v 소스
 │   └── sim/                    # 컴파일 결과물 (.gitignore)
 │
 ├── rpi/                        # RPi5 소프트웨어 (Phase 7~9)
@@ -145,10 +144,11 @@ python test_model_numpy.py
 
 ## 하드웨어 (FPGA RTL)
 
-> **현재 상태**: Phase 6-1 완료(Vivado 합성·구현·비트스트림 동작 확인, 자원 LUT 3.2K·FF 7.1K·BRAM36 4·DSP 2).  
-> 100MHz 타이밍 미달(WNS −5.498ns) 해결책으로 **Phase 6-2 다중 트랙 시분할(TDM) @50MHz** 설계 — 단일 데이터패스를 N트랙이 공유, 트랙별 막전위·이상카운터만 복제. iverilog 검증 완료(tb_mt_snn_top 496/496, tb_mt_spi_top 8/8). 50MHz 합성은 빌드 대기.  
+> **현재 상태**: **Phase 6 완료** — 100MHz 타이밍 미달(WNS −5.498ns)을 **다중 트랙 시분할(TDM) @50MHz**로 해결.  
+> 단일 데이터패스를 N트랙이 공유(트랙별 막전위·이상카운터만 복제). 50MHz 합성·구현·비트스트림 완주 → **WNS +4.072ns(타이밍 닫힘)**, LUT 2,033·FF 4,605·BRAM36 12·DSP 1.  
+> 검증: iverilog(tb_mt_snn_top 496/496, tb_mt_spi_top 8/8, tb_mt_selftest PASS) + **보드 자가진단(mt_selftest_top) 실리콘 PASS** — RPi 없이 골든 입력으로 LED15 점등 확인.  
 > ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시).  
-> Phase 7~9: RPi5 소프트웨어 → 통합 → 데모.
+> Phase 7~9: RPi5 소프트웨어(다중트랙 track_id) → 통합 → 데모.
 
 ### RTL 설계 사양 (`hardware/src/`)
 
@@ -156,12 +156,13 @@ python test_model_numpy.py
 | -----------------| ---------------------------------------------|
 | 타깃 보드　　　 | Nexys A7 100T (XC7A100T)　　　　　　　　　　|
 | 입력 인터페이스 | SPI slave (10MHz, 41바이트 패킷)　　　　　　|
-| 채널 수　　　　 | 2채널 동시 (snn_top 2개 인스턴스)　　　　　 |
-| 처리 방식　　　 | 시분할(Time-Multiplexing), 162클럭/타임스텝 |
-| 가중치 저장　　 | BRAM (9,280 × INT8 ≈ 74Kbits, 채널당)　　　 |
-| 막전위 형식　　 | 16-bit signed, Soft Reset　　　　　　　　　 |
-| 이상 판정　　　 | Leaky Counter (`cnt_anomaly > cnt_normal`)　|
-| 출력　　　　　　| `ch0_anomaly`, `ch1_anomaly` → LED0/LED1　　|
+| 동작 클럭 | 50 MHz (보드 100MHz E3 → `clk_div2` 2분주) |
+| 채널/트랙 | 다중 트랙 시분할 (`N_TRACKS`, 기본 64) — 단일 데이터패스 공유. 초기 듀얼채널(snn_top×2)은 동결 |
+| 처리 방식 | 시분할(Time-Multiplexing) — 162뉴런/타임스텝, 타임스텝당 ≈9,607클럭 |
+| 가중치 저장 | BRAM (9,280 × INT8 ≈ 74Kbits, 전 트랙 공유) |
+| 막전위 형식 | 16-bit signed, Soft Reset (트랙별 BRAM) |
+| 이상 판정 | 트랙별 Leaky Counter (`cnt_anomaly > cnt_normal`) |
+| 출력 | `anomaly_flags[N]` → LED. 보드 자가진단 시 LED15=PASS |
 
 ### 시뮬레이션 (Testbench)
 
@@ -177,6 +178,7 @@ python test_model_numpy.py
 | `tb_dual_snn_top.v` | 듀얼채널 + SPI (mode 0) 검증 | 314 | `weights/golden/*.hex` |
 | `tb_mt_snn_top.v` | 다중 트랙 시분할 코어 (4트랙 인터리빙 골든) | 496 | `weights/golden/*.hex` |
 | `tb_mt_spi_top.v` | SPI 통합 시분할 (clk분주 + track 디먹스) | 8 | `weights/golden/*.hex` |
+| `tb_mt_selftest.v` | 보드 자가진단(mt_selftest_top) 시뮬 — 골든 스파이크 62개 자체 비교 → LED15=PASS | PASS/FAIL | `weights/golden/*.hex` |
 
 #### A. VSCode 터미널 (iverilog)
 
@@ -220,6 +222,11 @@ mkdir -p hardware/sim
 /usr/bin/iverilog -g2001 -o hardware/sim/mt_spi_top \
     hardware/testbench/tb_mt_spi_top.v hardware/src/*.v
 /usr/bin/vvp hardware/sim/mt_spi_top
+
+# Phase 6-2 — 보드 자가진단(mt_selftest_top) 시뮬 (RPi 없이 LED15=PASS)
+/usr/bin/iverilog -g2001 -o hardware/sim/mt_selftest \
+    hardware/testbench/tb_mt_selftest.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/mt_selftest
 ```
 
 #### B. Vivado (Windows / SMB Z:/ 마운트)
@@ -258,7 +265,7 @@ mkdir -p hardware/sim
 - [x] 학습 루프 구현 — Focal Loss, Mixup, SpecAugment, Resume (`train.py`)
 - [x] NumPy 순전파 검증 스크립트 (`test_model_numpy.py`)
 - [x] MIMII / DCASE 데이터셋 학습 완료 (모델 4종)
-- [x] 구 RTL 설계 — Level Crossing + LIF (`hardware/src_old/`)
+- [x] 1세대 구 RTL (Level Crossing + LIF) 설계 — 신규 시분할 설계로 대체되어 제거
 
 ---
 
@@ -283,7 +290,7 @@ mkdir -p hardware/sim
 
 **Phase 3 — 제어·통합 모듈** ✅ 완료
 - [x] `control_fsm.v` — 3레이어 시퀀서 FSM (L1×128 → L2×32 → L3×2, 31 타임스텝)
-- [x] `anomaly_judge.v` — `src_old`에서 복사 (Leaky Counter, 수정 없음)
+- [x] `anomaly_judge.v` — Leaky Counter 이상 판정 (1세대 설계 기반)
 - [x] `snn_top.v` — 최상위 통합 (`mel_in[40×8bit]` + `frame_valid` → `anomaly_flag`)
 - [x] 테스트벤치 — `phase3_tb.v` (57 TC 전체 통과)
 
@@ -305,7 +312,7 @@ mkdir -p hardware/sim
 - [x] 합성·구현·비트스트림 동작 확인 — 자원: **LUT 3,211 / FF 7,094 / BRAM36 4 / DSP 2** (각 <6%)
 - [x] 타이밍 분석: WNS −5.498ns @100MHz (임계경로 param_rom→PLIF→막전위) → 해결책으로 Phase 6-2 시분할 @50MHz 채택
 
-**Phase 6-2 — 다중 트랙 시분할(TDM) @50MHz** 🔧 진행 중
+**Phase 6-2 — 다중 트랙 시분할(TDM) @50MHz** ✅ 완료
 - 단일 데이터패스(MAC·weight BRAM·param ROM·spike_mem)를 **N_TRACKS개 트랙이 시분할 공유**, 트랙별 상태(막전위·이상카운터)만 복제. 50MHz에서 임계경로 15.3ns < 20ns 여유. (복제 ~30트랙 한계 대비, 시분할 ~165트랙@50MHz)
 - [x] `membrane_mem_mt.v` — 트랙당 256스트라이드 BRAM, 동기읽기 (first_ts 마스킹으로 버퍼리셋)
 - [x] `anomaly_judge_mt.v` — 트랙별 Leaky Counter
@@ -314,12 +321,13 @@ mkdir -p hardware/sim
 - [x] `mt_spi_top.v` — 보드 최상위 (clk분주 + spi_slave + channel_id=track_id 디먹스 → LED[0..15])
 - [x] `tb_mt_snn_top.v` (496 TC, 4트랙 인터리빙 bit-exact) / `tb_mt_spi_top.v` (8 TC, SPI 통합)
 - [x] Vivado 자동화 ([create_project_mt.tcl](hardware/fpga/create_project_mt.tcl), Top `mt_spi_top`) + [nexys_a7_mt.xdc](hardware/constraints/nexys_a7_mt.xdc) (50MHz 생성클럭)
-- [ ] 50MHz 합성·구현·비트스트림 + WNS≥0 실측 (Windows Vivado 빌드 대기)
-- [ ] FPGA 프로그래밍 → LED 동작 확인
+- [x] **50MHz 합성·구현·비트스트림 완주** (Vivado 2025.2): **WNS +4.072ns**(타이밍 닫힘), **LUT 2,033 / FF 4,605 / BRAM36 12 / DSP 1** (듀얼 대비 LUT·FF·DSP↓, 막전위 BRAM↑). 0 Warnings.
+- [x] **보드 자가진단** — [mt_selftest_top.v](hardware/src/mt_selftest_top.v) + [create_project_selftest.tcl](hardware/fpga/create_project_selftest.tcl): RPi 없이 칩 안 골든 anomaly로 출력 스파이크 62개 자체 비교 → **실제 보드 PASS (LED15 점등)**. iverilog [tb_mt_selftest.v](hardware/testbench/tb_mt_selftest.v)로도 PASS 확인. `mt_snn_top`에 관찰용 `dbg_*` 출력 추가(mt_spi_top 미연결).
 
 **Phase 7 — RPi5 소프트웨어** ⬜ 예정
-- [ ] `rpi/capture_mel.py` — USB 마이크 2채널 캡처 + Mel INT8 변환
-- [ ] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 10MHz)
+> ⚠️ 시분할 다중트랙이므로 SPI 패킷 첫 바이트에 **track_id(0~N-1)** 를 실어야 함 (포맷 41B 동일, 기존 2채널 0/1 → N트랙 확장).
+- [ ] `rpi/capture_mel.py` — USB 마이크 캡처 + Mel INT8 변환 (다중 트랙)
+- [ ] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 10MHz, track_id 전송)
 - [ ] `rpi/main.py` — 2채널 실시간 파이프라인 (레이턴시 목표 ≤ 550ms)
 - [ ] `--dry-run` 모드 — FPGA 없이 numpy 추론으로 파이프라인 검증
 
