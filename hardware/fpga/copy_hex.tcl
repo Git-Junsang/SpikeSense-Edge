@@ -17,11 +17,26 @@ set _here [file normalize [file dirname [info script]]]   ;# .../hardware/fpga
 set _repo [file normalize "$_here/../.."]
 set _wt   "$_repo/hardware/src/weights"
 
+# 복사 대상 디렉토리: cwd + 합성 run 디렉토리(명시적 조회).
+# 프로젝트 플로우에서 PRE-훅의 cwd가 run 디렉토리가 아닐 수 있어,
+# $readmem이 실제로 탐색하는 synth_1 run 디렉토리에도 확실히 복사한다.
+set _dsts [list [pwd]]
+if { ![catch { set _rd [get_property DIRECTORY [get_runs synth_1]] }] && $_rd ne "" } {
+    if { [lsearch -exact $_dsts $_rd] < 0 } { lappend _dsts $_rd }
+}
+puts "INFO(copy_hex): cwd=[pwd]"
+puts "INFO(copy_hex): 대상 디렉토리 = $_dsts"
+
 foreach _h {w1.hex w2.hex w3.hex beta.hex vth.hex} {
     set _src [file join $_wt $_h]
     if { ![file exists $_src] } {
         error "copy_hex: 원본 hex 없음 → $_src"
     }
-    file copy -force $_src [pwd]
-    puts "INFO(copy_hex): $_h → [pwd]"
+    foreach _d $_dsts {
+        if { [catch { file copy -force $_src $_d } _e] } {
+            puts "WARN(copy_hex): $_h → $_d 복사 실패: $_e"
+        } else {
+            puts "INFO(copy_hex): $_h → $_d"
+        }
+    }
 }

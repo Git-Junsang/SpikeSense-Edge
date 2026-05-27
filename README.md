@@ -145,8 +145,8 @@ python test_model_numpy.py
 
 ## 하드웨어 (FPGA RTL)
 
-> **현재 상태**: Phase 6 진행 중 — Vivado 합성·구현·비트스트림 생성까지 동작 확인(자원 LUT 3.2K·FF 7.1K·BRAM36 4·DSP 2).  
-> 단 100MHz 타이밍 미달(WNS −5.498ns, 임계경로 MAC→PLIF→막전위) → 클럭 하향(예: 50MHz) 조정 필요.  
+> **현재 상태**: Phase 6-1 완료(Vivado 합성·구현·비트스트림 동작 확인, 자원 LUT 3.2K·FF 7.1K·BRAM36 4·DSP 2).  
+> 100MHz 타이밍 미달(WNS −5.498ns) 해결책으로 **Phase 6-2 다중 트랙 시분할(TDM) @50MHz** 설계 — 단일 데이터패스를 N트랙이 공유, 트랙별 막전위·이상카운터만 복제. iverilog 검증 완료(tb_mt_snn_top 496/496, tb_mt_spi_top 8/8). 50MHz 합성은 빌드 대기.  
 > ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시).  
 > Phase 7~9: RPi5 소프트웨어 → 통합 → 데모.
 
@@ -175,6 +175,8 @@ python test_model_numpy.py
 | `phase3_tb.v` | Phase 3 control_fsm·snn_top | 57 | `weights/*.hex` |
 | `tb_snn_top.v` | 전체 시스템 골든 벡터 검증 | 312 | `weights/golden/*.hex` |
 | `tb_dual_snn_top.v` | 듀얼채널 + SPI (mode 0) 검증 | 314 | `weights/golden/*.hex` |
+| `tb_mt_snn_top.v` | 다중 트랙 시분할 코어 (4트랙 인터리빙 골든) | 496 | `weights/golden/*.hex` |
+| `tb_mt_spi_top.v` | SPI 통합 시분할 (clk분주 + track 디먹스) | 8 | `weights/golden/*.hex` |
 
 #### A. VSCode 터미널 (iverilog)
 
@@ -209,6 +211,15 @@ mkdir -p hardware/sim
 /usr/bin/iverilog -g2001 -o hardware/sim/dual_snn_top \
     hardware/testbench/tb_dual_snn_top.v hardware/src/*.v
 /usr/bin/vvp hardware/sim/dual_snn_top
+
+# Phase 6-2 — 다중 트랙 시분할 (50MHz): 코어 골든 검증
+/usr/bin/iverilog -g2001 -o hardware/sim/mt_snn_top \
+    hardware/testbench/tb_mt_snn_top.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/mt_snn_top
+# Phase 6-2 — SPI 통합(clk분주 + track 디먹스) 검증
+/usr/bin/iverilog -g2001 -o hardware/sim/mt_spi_top \
+    hardware/testbench/tb_mt_spi_top.v hardware/src/*.v
+/usr/bin/vvp hardware/sim/mt_spi_top
 ```
 
 #### B. Vivado (Windows / SMB Z:/ 마운트)
@@ -287,13 +298,24 @@ mkdir -p hardware/sim
 - [x] `hardware/constraints/nexys_a7.xdc` — Nexys A7 100T 핀 할당 (SPI=Pmod JA, LED0/1)
 - [x] `testbench/tb_dual_snn_top.v` — SPI mode 0 마스터 모사, ch0=anomaly·ch1=normal 골든 (314 TC 전체 통과)
 
-**Phase 6 — Vivado 합성 및 FPGA 구현** 🔧 진행 중
+**Phase 6-1 — Vivado 합성 및 FPGA 구현 (듀얼채널)** ✅ 완료
 - [x] Vivado 프로젝트 자동화 ([hardware/fpga/create_project.tcl](hardware/fpga/create_project.tcl), Top `dual_snn_top`, xc7a100tcsg324-1)
   - ⚠️ 프로젝트 경로는 **ASCII 필수** — 한글 경로면 합성 run(별도 프로세스)이 무에러 크래시
   - hex 경로: `ifdef SYNTHESIS` + PRE 훅([copy_hex.tcl](hardware/fpga/copy_hex.tcl))으로 합성 cwd에 복사
 - [x] 합성·구현·비트스트림 동작 확인 — 자원: **LUT 3,211 / FF 7,094 / BRAM36 4 / DSP 2** (각 <6%)
-- [ ] **타이밍 미달**: WNS −5.498ns @100MHz (임계경로 MAC→PLIF→막전위, ~64MHz 한계) → **클럭 50MHz 하향 등 필요**
-- [ ] FPGA 프로그래밍 → LED 기본 동작 확인
+- [x] 타이밍 분석: WNS −5.498ns @100MHz (임계경로 param_rom→PLIF→막전위) → 해결책으로 Phase 6-2 시분할 @50MHz 채택
+
+**Phase 6-2 — 다중 트랙 시분할(TDM) @50MHz** 🔧 진행 중
+- 단일 데이터패스(MAC·weight BRAM·param ROM·spike_mem)를 **N_TRACKS개 트랙이 시분할 공유**, 트랙별 상태(막전위·이상카운터)만 복제. 50MHz에서 임계경로 15.3ns < 20ns 여유. (복제 ~30트랙 한계 대비, 시분할 ~165트랙@50MHz)
+- [x] `membrane_mem_mt.v` — 트랙당 256스트라이드 BRAM, 동기읽기 (first_ts 마스킹으로 버퍼리셋)
+- [x] `anomaly_judge_mt.v` — 트랙별 Leaky Counter
+- [x] `control_fsm_mt.v` — track_id·트랙별 ts 카운터·first_ts (snn_top/dual_snn_top 동결, 신규)
+- [x] `mt_snn_top.v` — 시분할 SNN 엔진, `clk_div2.v` — 100→50MHz 2분주
+- [x] `mt_spi_top.v` — 보드 최상위 (clk분주 + spi_slave + channel_id=track_id 디먹스 → LED[0..15])
+- [x] `tb_mt_snn_top.v` (496 TC, 4트랙 인터리빙 bit-exact) / `tb_mt_spi_top.v` (8 TC, SPI 통합)
+- [x] Vivado 자동화 ([create_project_mt.tcl](hardware/fpga/create_project_mt.tcl), Top `mt_spi_top`) + [nexys_a7_mt.xdc](hardware/constraints/nexys_a7_mt.xdc) (50MHz 생성클럭)
+- [ ] 50MHz 합성·구현·비트스트림 + WNS≥0 실측 (Windows Vivado 빌드 대기)
+- [ ] FPGA 프로그래밍 → LED 동작 확인
 
 **Phase 7 — RPi5 소프트웨어** ⬜ 예정
 - [ ] `rpi/capture_mel.py` — USB 마이크 2채널 캡처 + Mel INT8 변환

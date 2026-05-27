@@ -2,7 +2,7 @@
 hardware/sim/
 
 # Vivado 프로젝트 빌드 산출물 (create_project.tcl로 재생성 가능)
-hardware/fpga/vivado_spikehw/
+hardware/fpga/vivado_spikehw*/
 hardware/fpga/build/
 hardware/fpga/*.jou
 hardware/fpga/*.log
