@@ -28,9 +28,15 @@ module param_rom #(
     reg [7:0] beta_mem [0:N_NEURONS-1];
     reg [7:0] vth_mem  [0:N_NEURONS-1];
 
+    // hex 경로: 시뮬은 저장소 루트 기준 상대경로, 합성은 파일명만 (weight_bram.v 참조)
     initial begin
+`ifdef SYNTHESIS
+        $readmemh("beta.hex", beta_mem);
+        $readmemh("vth.hex",  vth_mem);
+`else
         $readmemh("hardware/src/weights/beta.hex", beta_mem);
         $readmemh("hardware/src/weights/vth.hex",  vth_mem);
+`endif
     end
 
     // 조합논리 읽기

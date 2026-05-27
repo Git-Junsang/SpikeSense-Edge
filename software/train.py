@@ -187,7 +187,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--lr", type=float, default=0.002)
     parser.add_argument("--n_mels", type=int, default=40)
-    parser.add_argument("--segment_ms", type=int, default=500)
+    parser.add_argument("--segment_ms", type=int, default=992)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 

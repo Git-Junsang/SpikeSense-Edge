@@ -42,7 +42,7 @@ Input (40) → Hidden1 (128) → Hidden2 (32) → Output (2)
               PLIF-T          PLIF-T         PLIF-T
 ```
 
-- 입력: 500ms 오디오 버퍼 → 40채널 Log-Mel Spectrogram → 31 타임스텝
+- 입력: ~1초 오디오 버퍼 (31 × 32ms = 992ms) → 40채널 Log-Mel Spectrogram → 31 타임스텝
 - 뉴런: β(감쇠율)와 V_th(발화 임계값)가 모두 학습 파라미터
 - 분류: 타임스텝별 막전위 평균의 argmax → 정상(0) / 이상(1)
 - 총 가중치: 9,280개 (하드웨어에서 INT8 양자화)
@@ -132,7 +132,7 @@ python train.py --data_dir ../data --model_name my_model.pth --epochs 300 --resu
 | `--batch_size` | 배치 크기 | 256 |
 | `--lr` | 초기 학습률 (Cosine Annealing 적용) | 0.002 |
 | `--n_mels` | Mel 밴드 수 및 입력 채널 | 40 |
-| `--segment_ms` | 데이터 분할 단위 (ms) | 500 |
+| `--segment_ms` | 데이터 분할 단위 (ms) | 992 |
 
 ### 순전파 동작 확인 (PyTorch 없이)
 
@@ -145,21 +145,23 @@ python test_model_numpy.py
 
 ## 하드웨어 (FPGA RTL)
 
-> **현재 상태**: Phase 5 완료 — 듀얼채널 + SPI 인터페이스 RTL 구현 및 검증 통과.  
-> Phase 6~9: Vivado 합성 → FPGA 구현 → RPi5 소프트웨어 → 데모.
+> **현재 상태**: Phase 6 진행 중 — Vivado 합성·구현·비트스트림 생성까지 동작 확인(자원 LUT 3.2K·FF 7.1K·BRAM36 4·DSP 2).  
+> 단 100MHz 타이밍 미달(WNS −5.498ns, 임계경로 MAC→PLIF→막전위) → 클럭 하향(예: 50MHz) 조정 필요.  
+> ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시).  
+> Phase 7~9: RPi5 소프트웨어 → 통합 → 데모.
 
 ### RTL 설계 사양 (`hardware/src/`)
 
-| 항목 | 사양 |
-|------|------|
-| 타깃 보드 | Nexys A7 100T (XC7A100T) |
-| 입력 인터페이스 | SPI slave (10MHz, 41바이트 패킷) |
-| 채널 수 | 2채널 동시 (snn_top 2개 인스턴스) |
-| 처리 방식 | 시분할(Time-Multiplexing), 162클럭/타임스텝 |
-| 가중치 저장 | BRAM (9,280 × INT8 ≈ 74Kbits, 채널당) |
-| 막전위 형식 | 16-bit signed, Soft Reset |
-| 이상 판정 | Leaky Counter (`cnt_anomaly > cnt_normal`) |
-| 출력 | `ch0_anomaly`, `ch1_anomaly` → LED0/LED1 |
+| 항목　　　　　　| 사양　　　　　　　　　　　　　　　　　　　　|
+| -----------------| ---------------------------------------------|
+| 타깃 보드　　　 | Nexys A7 100T (XC7A100T)　　　　　　　　　　|
+| 입력 인터페이스 | SPI slave (10MHz, 41바이트 패킷)　　　　　　|
+| 채널 수　　　　 | 2채널 동시 (snn_top 2개 인스턴스)　　　　　 |
+| 처리 방식　　　 | 시분할(Time-Multiplexing), 162클럭/타임스텝 |
+| 가중치 저장　　 | BRAM (9,280 × INT8 ≈ 74Kbits, 채널당)　　　 |
+| 막전위 형식　　 | 16-bit signed, Soft Reset　　　　　　　　　 |
+| 이상 판정　　　 | Leaky Counter (`cnt_anomaly > cnt_normal`)　|
+| 출력　　　　　　| `ch0_anomaly`, `ch1_anomaly` → LED0/LED1　　|
 
 ### 시뮬레이션 (Testbench)
 
@@ -219,7 +221,7 @@ mkdir -p hardware/sim
 2. **Simulation 상단 모듈**: `plift_core_tb` 선택
 3. **`phase2_tb.v` 사용 시** (`$readmemh` 경로 필요):  
    Project Settings → Simulation → **Simulation working directory**  
-   → `Z:\2026 CAU\서울대학교 학부인턴\git\SpikeSense-Edge` 로 변경
+   → `Z:\2026 CAU\SpikeSense-Edge\git\SpikeSense-Edge` 로 변경
 4. Flow Navigator → **Run Simulation → Run Behavioral Simulation**
 5. Tcl Console: `run all` 입력 → $display 출력 확인  
    파형: Objects 패널에서 신호를 Waveform 창으로 드래그
@@ -285,11 +287,13 @@ mkdir -p hardware/sim
 - [x] `hardware/constraints/nexys_a7.xdc` — Nexys A7 100T 핀 할당 (SPI=Pmod JA, LED0/1)
 - [x] `testbench/tb_dual_snn_top.v` — SPI mode 0 마스터 모사, ch0=anomaly·ch1=normal 골든 (314 TC 전체 통과)
 
-**Phase 6 — Vivado 합성 및 FPGA 구현** ⬜ 예정
-- [ ] Vivado 프로젝트 생성 (Top: `dual_snn_top`, target: xc7a100tcsg324-1)
-- [ ] 합성 (Synthesis) — LUT ~5K / 63K, BRAM ~6 BRAM36 예상
-- [ ] 구현 (Implementation) — WNS ≥ 0 확인
-- [ ] 비트스트림 생성 및 FPGA 프로그래밍 → LED 기본 동작 확인
+**Phase 6 — Vivado 합성 및 FPGA 구현** 🔧 진행 중
+- [x] Vivado 프로젝트 자동화 ([hardware/fpga/create_project.tcl](hardware/fpga/create_project.tcl), Top `dual_snn_top`, xc7a100tcsg324-1)
+  - ⚠️ 프로젝트 경로는 **ASCII 필수** — 한글 경로면 합성 run(별도 프로세스)이 무에러 크래시
+  - hex 경로: `ifdef SYNTHESIS` + PRE 훅([copy_hex.tcl](hardware/fpga/copy_hex.tcl))으로 합성 cwd에 복사
+- [x] 합성·구현·비트스트림 동작 확인 — 자원: **LUT 3,211 / FF 7,094 / BRAM36 4 / DSP 2** (각 <6%)
+- [ ] **타이밍 미달**: WNS −5.498ns @100MHz (임계경로 MAC→PLIF→막전위, ~64MHz 한계) → **클럭 50MHz 하향 등 필요**
+- [ ] FPGA 프로그래밍 → LED 기본 동작 확인
 
 **Phase 7 — RPi5 소프트웨어** ⬜ 예정
 - [ ] `rpi/capture_mel.py` — USB 마이크 2채널 캡처 + Mel INT8 변환

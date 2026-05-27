@@ -55,7 +55,7 @@ class PLIFLayer(nn.Module):
         membrane = beta * membrane + input_current
         spikes = spike_fn(membrane, thr)
         
-        # Hard Reset 모델 (스파이크 방출 시 막전위 차감)
+        # Soft Reset 모델 (스파이크 방출 시 막전위 차감)
         membrane = membrane - spikes * thr
         
         return spikes, membrane

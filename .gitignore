@@ -1,6 +1,13 @@
 # iverilog 컴파일 결과물 (바이너리, VCD)
 hardware/sim/
 
+# Vivado 프로젝트 빌드 산출물 (create_project.tcl로 재생성 가능)
+hardware/fpga/vivado_spikehw/
+hardware/fpga/build/
+hardware/fpga/*.jou
+hardware/fpga/*.log
+.Xil/
+
 # Python 캐시
 __pycache__/
 *.pyc
@@ -8,3 +15,7 @@ software/cache_*.npz
 
 # 모델 파일 (용량)
 software/*.pth
+
+# study_guide 다이어그램 빌드 부산물 (SVG 결과물은 커밋, 캐시·설정은 제외)
+documents/study_guide/.puppeteer.json
+documents/study_guide/diagrams/.cache/

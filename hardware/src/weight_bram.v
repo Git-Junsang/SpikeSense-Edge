@@ -26,10 +26,20 @@ module weight_bram #(
 
     reg signed [DATA_WIDTH-1:0] mem [0:DEPTH-1];
 
+    // hex 경로: 시뮬레이션(iverilog/Vivado sim)은 저장소 루트 기준 상대경로,
+    // Vivado 합성은 working dir이 다르므로 파일명만 사용 (hex를 프로젝트 소스로
+    // 추가하면 Vivado가 소스 디렉토리에서 basename으로 탐색).
+    // SYNTHESIS 매크로는 합성 run에서만 정의된다 (create_project.tcl 참조).
     initial begin
+`ifdef SYNTHESIS
+        $readmemh("w1.hex", mem,    0, 5119);
+        $readmemh("w2.hex", mem, 5120, 9215);
+        $readmemh("w3.hex", mem, 9216, 9279);
+`else
         $readmemh("hardware/src/weights/w1.hex", mem,    0, 5119);
         $readmemh("hardware/src/weights/w2.hex", mem, 5120, 9215);
         $readmemh("hardware/src/weights/w3.hex", mem, 9216, 9279);
+`endif
     end
 
     always @(posedge clk) begin
