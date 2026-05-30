@@ -16,7 +16,7 @@ PyTorch로 학습한 PLIF-T SNN 모델을 Xilinx Artix-7 FPGA에 이식하는 �
 [Raspberry Pi 5]
    ├─ CH0: Mel Spectrogram → INT8 × 40ch
    └─ CH1: Mel Spectrogram → INT8 × 40ch
-   │ SPI (10MHz, 41바이트 패킷/프레임)
+   │ SPI (5MHz, 41바이트 패킷/프레임)
    ▼
 [Nexys A7 100T FPGA]
    ├─ SPI slave → dual_snn_top
@@ -81,11 +81,12 @@ SpikeSense-Edge/
 │   └── sim/                    # 컴파일 결과물 (.gitignore)
 │
 ├── rpi/                        # RPi5 소프트웨어 (Phase 7 완료 / 데모 Phase 9)
-│   ├── requirements.txt        # numpy, librosa, soundfile, sounddevice, spidev
-│   ├── capture_mel.py          # USB 마이크 N트랙 캡처 + Mel INT8 변환
+│   ├── requirements.txt        # numpy, scipy, librosa, soundfile, sounddevice, spidev
+│   ├── capture_mel.py          # USB 마이크 N트랙 캡처 + Mel INT8 (sounddevice/arecord 백엔드)
 │   ├── snn_infer.py            # NumPy INT8 추론 (dry-run, RTL bit-exact)
-│   ├── fpga_spi.py             # SPI 드라이버 (41바이트 패킷, track_id)
+│   ├── fpga_spi.py             # SPI 드라이버 (5MHz, 41B 패킷, track_id, 프레임 간격)
 │   ├── main.py                 # 메인 루프 (다중 트랙 파이프라인, --dry-run)
+│   ├── hw_test.py              # Phase 8 SPI 통합 테스트 (wiring/led/sweep)
 │   └── demo.py                 # 터미널 UI 데모 (Phase 9 예정)
 │
 └── CLAUDE.md                   # AI 코딩 보조 가이드
@@ -156,7 +157,7 @@ python test_model_numpy.py
 | 항목　　　　　　| 사양　　　　　　　　　　　　　　　　　　　　|
 | -----------------| ---------------------------------------------|
 | 타깃 보드　　　 | Nexys A7 100T (XC7A100T)　　　　　　　　　　|
-| 입력 인터페이스 | SPI slave (10MHz, 41바이트 패킷)　　　　　　|
+| 입력 인터페이스 | SPI slave (5MHz, 41바이트 패킷)　　　　　　　|
 | 동작 클럭 | 50 MHz (보드 100MHz E3 → `clk_div2` 2분주) |
 | 채널/트랙 | 다중 트랙 시분할 (`N_TRACKS`, 기본 64) — 단일 데이터패스 공유. 초기 듀얼채널(snn_top×2)은 동결 |
 | 처리 방식 | 시분할(Time-Multiplexing) — 162뉴런/타임스텝, 타임스텝당 ≈9,607클럭 |
@@ -329,15 +330,22 @@ mkdir -p hardware/sim
 > ⚠️ 시분할 다중트랙이므로 SPI 패킷 첫 바이트에 **track_id(0~N-1)** 를 실어야 함 (포맷 41B 동일, 기존 2채널 0/1 → N트랙 확장).
 > ⚠️ 현재 RTL은 **수신 전용(MOSI)** — MISO 리드백 경로 없음. 이상 판정은 보드 LED[track]로만 관찰되며, RPi 터미널 표시는 `--monitor`(numpy 그림자 추론)로 제공.
 - [x] `rpi/capture_mel.py` — USB 마이크 N트랙 캡처 + Mel INT8 변환 (학습 `extract_mel_spectrogram`과 1:1 동일 전처리, `MicCapture`/`wav_to_segments`)
-- [x] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 10MHz, mode 0, 41B 패킷 `[track_id][mel×40]`, `MockSpi` 더미 포함)
+- [x] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 5MHz, mode 0, 41B 패킷 `[track_id][mel×40]`, 프레임 간격 1ms, `MockSpi` 더미 포함)
 - [x] `rpi/snn_infer.py` — NumPy INT8 추론 (hex 가중치 로드, **골든 벡터 RTL bit-exact PASS** — PyTorch 불필요)
 - [x] `rpi/main.py` — 다중 트랙 실시간 파이프라인 (FPGA 모드 + `--monitor` numpy 그림자, `--dry-run`, `--from-wav`, `--list-mics`)
 - [x] `--dry-run` 모드 — FPGA 없이 numpy 추론으로 전 파이프라인 검증 (골든/ WAV / 마이크 입력)
 
-**Phase 8 — 하드웨어 통합 테스트** ⬜ 예정
-- [ ] SPI 파형 확인 (RPi5 → Nexys A7 배선 검증)
-- [ ] 실제 팬 소음으로 `anomaly_flag` 정확도 테스트
-- [ ] 2채널 독립 동작 확인 (ch0만 이상음, ch1은 정상)
+**Phase 8 — 하드웨어 통합 테스트** 🔧 도구 완성 (실보드 점등 확인 대기)
+> 마이크/모델 정확도와 **SPI 링크 검증을 분리**: HW 이상판정은 막전위가 아니라 **L3 스파이크 Leaky Counter(`cnt_a>cnt_n`)** 이므로, 그 조건을 확실히 만드는 전용 벡터로 LED를 검증한다. (골든 벡터는 둘 다 LED를 못 켬 — 검증으로 확인)
+- [x] `software/make_hw_test_vectors.py` — `hw_anomaly_mel.npy`(cnt_a=31,cnt_n=0→LED ON) / `hw_normal_mel.npy`(cnt_n=29,cnt_a=2→LED OFF) 생성
+- [x] `rpi/hw_test.py` — SPI 통합 테스트 (`wiring`/`led`/`sweep`), mock 동작 확인
+- [x] **프로토콜 정합성 적대 검증** (멀티에이전트): 패킷 바이트순서·track→LED 매핑·LED 점등논리 PASS. SPI 속도 **10→5MHz**(검증 tb 일치, 마진 확보), 프레임 간격 **500µs→1ms**(busy-drop 방지) 반영
+- [ ] (보드) `hw_test.py wiring` → 로직애널라이저로 SCK/MOSI/CS_n 확인
+- [ ] (보드) `hw_test.py led` → LED1 ON / LED0 OFF 점등 확인 (SPI 링크·디먹스·이상판정 PASS)
+- [ ] (보드) `hw_test.py sweep` → 트랙별 LED 순차 점등 (디먹스 격리)
+- [ ] (보드) 실제 팬 소음 정확도 — ⚠️ 모델은 학습 데이터셋(MIMII) 도메인 한정. 타깃 기계 재학습 필요
+
+> **테스트 절차**: ① FPGA에 `mult_spi_top` 비트스트림 프로그램 ② 배선(JA1=SCK/JA2=MOSI/JA3=CS_n/GND) ③ `CPU_RESETN`(C12) 눌러 카운터 초기화 ④ RPi `cd rpi && python3 hw_test.py led` → LED 관찰.
 
 **Phase 9 — 데모** ⬜ 예정
 - [ ] `rpi/demo.py` — 터미널 UI (2채널 실시간 상태 표시)

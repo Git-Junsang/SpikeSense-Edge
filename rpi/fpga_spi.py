@@ -15,10 +15,21 @@ FPGA는 CS 상승에서 frame_rdy를 내고 해당 track_id 슬롯을 추론한�
 
 spidev는 RPi5에서만 동작. 데스크톱 검증을 위해 import 실패 시 MockSpi를 쓸 수 있다.
 """
+import time
 import numpy as np
 
 MEL_BYTES   = 40
 PACKET_BYTES = 1 + MEL_BYTES   # track_id + 40 mel
+
+# 프레임 간 최소 간격: FPGA control_fsm_mult는 frame_valid를 S_IDLE에서만 수용하고
+# 한 타임스텝 처리에 ≈9,607클럭@50MHz ≈ 192µs 걸린다. 그 안에 다음 프레임이 오면
+# busy 상태라 무시(드롭)된다 → 처리시간의 5배 마진(1ms)을 둔다. RPi sleep 지터·
+# 실리콘 코너를 감안한 보수값 (Phase 8 검증 권고). 세그먼트당 31ms로 무시 가능.
+FRAME_GAP_S = 0.001
+
+# SPI SCK 기본 속도. 검증된 테스트벤치(tb_mult_spi_top)는 5MHz(50MHz 도메인 10× 오버샘플)다.
+# 10MHz는 SCK 펄스폭 ~50ns vs 2단 동기화 지연으로 마진이 얇아 미검증 → 보수적으로 5MHz 기본.
+DEFAULT_SPI_HZ = 5_000_000
 
 
 def _build_packet(track_id, mel_int8):
@@ -35,7 +46,7 @@ def _build_packet(track_id, mel_int8):
 class FpgaSpi:
     """spidev 기반 실제 전송기. RPi5 전용."""
 
-    def __init__(self, bus=0, device=0, speed_hz=10_000_000, mode=0):
+    def __init__(self, bus=0, device=0, speed_hz=DEFAULT_SPI_HZ, mode=0):
         import spidev
         self.spi = spidev.SpiDev()
         self.spi.open(bus, device)
@@ -47,10 +58,16 @@ class FpgaSpi:
         """한 트랙의 Mel 세그먼트(=한 타임스텝 41B 패킷) 전송. 결과 리드백 없음."""
         self.spi.xfer2(_build_packet(track_id, mel_int8))
 
-    def send_segment(self, track_id, seg):
-        """[31,40] 세그먼트 → 31개 타임스텝 패킷을 순서대로 전송 (FPGA가 누적 추론)."""
+    def send_segment(self, track_id, seg, gap_s=FRAME_GAP_S):
+        """[31,40] 세그먼트 → 31개 타임스텝 패킷을 순서대로 전송 (FPGA가 누적 추론).
+
+        프레임 사이 gap_s 만큼 대기 — FPGA가 직전 타임스텝을 처리(busy)하는 동안
+        다음 프레임이 도착하면 드롭되므로 처리시간 이상 간격을 둔다.
+        """
         for ts in range(seg.shape[0]):
             self.send(track_id, seg[ts])
+            if gap_s:
+                time.sleep(gap_s)
 
     def close(self):
         self.spi.close()
@@ -74,7 +91,7 @@ class MockSpi:
         self.packets += 1
         self.bytes += len(pkt)
 
-    def send_segment(self, track_id, seg):
+    def send_segment(self, track_id, seg, gap_s=FRAME_GAP_S):
         for ts in range(seg.shape[0]):
             self.send(track_id, seg[ts])
 

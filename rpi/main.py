@@ -151,7 +151,8 @@ def main():
     ap.add_argument("--once", action="store_true", help="한 버퍼만 처리 후 종료")
     ap.add_argument("--bus", type=int, default=0, help="SPI 버스 (기본 0)")
     ap.add_argument("--cs", type=int, default=0, help="SPI CS/device (기본 0=CE0)")
-    ap.add_argument("--speed", type=int, default=10_000_000, help="SPI 속도 Hz (기본 10MHz)")
+    ap.add_argument("--speed", type=int, default=5_000_000,
+                    help="SPI 속도 Hz (기본 5MHz — 검증된 tb 속도. 10MHz는 마진 얇음)")
     ap.add_argument("--weights-dir", default=DEFAULT_WEIGHTS, help="hex 가중치 경로")
     args = ap.parse_args()
 
