@@ -90,6 +90,12 @@ def mel_float_to_int8(mel_float):
     return np.clip(q, 0, 127).astype(np.int8)
 
 
+def rms_of(y):
+    """원시 파형 RMS — per-buffer 정규화 전 '실제 입력 세기'. 에너지 게이트용."""
+    y = np.asarray(y, dtype=np.float32)
+    return float(np.sqrt(np.mean(y ** 2))) if y.size else 0.0
+
+
 def waveform_to_segment(y):
     """파형 → 정확히 [31, 40] int8 세그먼트 한 장.
 
@@ -236,15 +242,15 @@ class MicCapture:
             y = self._record(dev, sr, blk)
             if self.gain != 1.0:
                 y = np.clip(y * self.gain, -1.0, 1.0)
+            rms = rms_of(y)                         # 정규화 전 실제 세기 (게이트용)
             if self.verbose:
                 pk = float(np.max(np.abs(y))) if len(y) else 0.0
-                rms = float(np.sqrt(np.mean(y ** 2))) if len(y) else 0.0
                 print(f"  [t{tid}] {len(y)} smp @ {sr}Hz  peak={pk:.4f} rms={rms:.4f}"
                       f"{'  ⚠ 매우 작음(게인↑)' if pk < 0.02 else ''}", flush=True)
             if sr != SR:
                 g = gcd(SR, sr)
                 y = resample_poly(y, SR // g, sr // g)
-            out.append((tid, waveform_to_segment(y)))
+            out.append((tid, waveform_to_segment(y), rms))
         return out
 
 
@@ -309,14 +315,14 @@ class ArecordCapture:
                 print(f"  [t{tid}] recording {self.dur_s}s @ {dev} ...",
                       flush=True)
             y = self._record(dev)
+            rms = rms_of(y)                         # 정규화 전 실제 세기 (게이트용)
             if self.verbose:
                 pk = float(np.max(np.abs(y))) if len(y) else 0.0
-                rms = float(np.sqrt(np.mean(y ** 2))) if len(y) else 0.0
                 dt = (_now() - t0) * 1000 if t0 is not None else -1
                 print(f"  [t{tid}] {len(y)} smp  peak={pk:.4f} rms={rms:.4f}"
                       f"  ({dt:.0f}ms){'  ⚠ 매우 작음(게인↑ 필요)' if pk < 0.02 else ''}",
                       flush=True)
-            out.append((tid, waveform_to_segment(y)))
+            out.append((tid, waveform_to_segment(y), rms))
         return out
 
 

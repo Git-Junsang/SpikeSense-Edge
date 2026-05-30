@@ -88,6 +88,17 @@ def _stream_loop(args, infer, spi):
     mics = _make_capture(args)
     n = len(mics.devices)
     print(f"  {n} track(s)  Ctrl-C to stop")
+    # 에너지 게이트: 원시 RMS < silence_rms 면 '무음' → normal 벡터 전송(LED off 유지).
+    # per-buffer 정규화가 정적 노이즈를 풀스케일로 증폭해 도메인 밖 오탐을 내는 것을 차단.
+    # 시끄러운 산업 현장에선 RMS가 항상 높아 게이트가 동작하지 않음(무해).
+    gate = not args.no_gate
+    norm_vec = None
+    if gate:
+        import numpy as _np
+        p = os.path.join(args.weights_dir, "golden", "hw_normal_mel.npy")
+        norm_vec = _np.load(p).astype(_np.int8) if os.path.exists(p) else None
+        if norm_vec is None:
+            print("  ⚠ hw_normal_mel.npy 없음 → 게이트는 전송 생략으로 동작")
     print("  warming up ...", flush=True)
     cm.warmup()   # mel 필터뱅크 로드 + 첫 FFT (순수 numpy라 즉시)
     with mics:
@@ -97,15 +108,23 @@ def _stream_loop(args, infer, spi):
                 print("  🎧 listening... (~1s)        ", end="\r", flush=True)
                 t0 = time.time()
                 segs = mics.read_segments()
-                for track_id, seg in segs:
+                for track_id, seg, rms in segs:
+                    silent = gate and rms < args.silence_rms
+                    if silent:
+                        # 무음: normal 벡터로 LED를 끈 상태 유지 (오탐 억제)
+                        if spi is not None and norm_vec is not None:
+                            spi.send_segment(track_id, norm_vec)
+                        print(f"  track {track_id:2d}: 🔇 silent (gated, rms={rms:.4f})"
+                              + " " * 8)
+                        continue
                     if spi is not None:
                         spi.send_segment(track_id, seg)
                     if infer is not None:
                         label, mem = infer.predict(seg)
                         latency = (time.time() - t0) * 1000
                         print(_fmt(track_id, label, mem,
-                                   extra=f"  ({latency:.0f}ms)") + " " * 8)
-                if infer is None:
+                                   extra=f"  rms={rms:.3f} ({latency:.0f}ms)") + " " * 4)
+                if infer is None and not all(gate and r < args.silence_rms for _, _, r in segs):
                     print(f"  sent {n} track(s) → check board LED[track]" + " " * 8)
                 if args.once:
                     break
@@ -142,6 +161,9 @@ def main():
     ap.add_argument("--gain", type=float, default=1.0,
                     help="소프트웨어 입력 게인 배수 (녹음이 작을 때, 예: 8.0)")
     ap.add_argument("--dur", type=float, default=1.0, help="버퍼당 녹음 길이 초 (기본 1)")
+    ap.add_argument("--silence-rms", type=float, default=0.01,
+                    help="원시 RMS가 이 값 미만이면 '무음'→normal 처리 (기본 0.01, -v로 rms 확인해 조정)")
+    ap.add_argument("--no-gate", action="store_true", help="에너지 게이트 비활성화")
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="단계별 로그(샘플 수·peak·rms·지연) 출력")
     ap.add_argument("--list-mics", action="store_true", help="입력 장치 목록 출력 후 종료")
