@@ -111,10 +111,11 @@ class MicCapture:
         self.cap_srs = [self._pick_samplerate(dev) for dev in self.devices]
         # 각 트랙: 16kHz 기준 SEG_SAMPLES와 같은 길이(시간)를 캡처 레이트로 환산
         self.blocks = [int(round(SEG_SAMPLES * sr / SR)) for sr in self.cap_srs]
+        # blocksize는 기본(0)으로 둔다 — PortAudio가 작은 주기로 받고 read(blk)가 누적.
+        # ~1초치(수만 프레임)를 stream blocksize로 고정하면 ALSA 버퍼를 못 채워 블로킹됨.
         self.streams = [
-            sd.InputStream(device=dev, channels=1, samplerate=sr,
-                           blocksize=blk, dtype="float32")
-            for dev, sr, blk in zip(self.devices, self.cap_srs, self.blocks)
+            sd.InputStream(device=dev, channels=1, samplerate=sr, dtype="float32")
+            for dev, sr in zip(self.devices, self.cap_srs)
         ]
         for dev, sr in zip(self.devices, self.cap_srs):
             note = "" if sr == SR else " → resample to 16kHz"
