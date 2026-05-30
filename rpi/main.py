@@ -74,6 +74,31 @@ def run_dry(args):
 
 # ── FPGA 모드 / 마이크 스트리밍 ───────────────────────────────
 
+def run_meter(args):
+    """RMS/dBFS 라이브 미터 — 컷라인(--silence-rms) 보정용. 추론·SPI 없음."""
+    import math
+    mics = _make_capture(args)
+    print("=" * 56)
+    print("RMS METER — 소리 내며 rms/dBFS 관찰 → --silence-rms 결정")
+    print(f"  현재 게이트선: --silence-rms={args.silence_rms}  (이 위로 올라가면 감지)")
+    print("  ⚠ 마이크 증폭은 alsamixer/amixer로 (소프트 --gain은 게이트 민감도 안 바뀜)")
+    print("=" * 56)
+    cm.warmup()
+    with mics:
+        try:
+            while True:
+                print("  🎧 ...", end="\r", flush=True)
+                for tid, seg, rms in mics.read_segments():
+                    db = 20 * math.log10(rms) if rms > 1e-9 else -120.0
+                    bar = "#" * max(0, min(40, int((db + 80) / 2)))   # -80..0 → 0..40
+                    mark = " ← 감지" if rms >= args.silence_rms else " (gated)"
+                    print(f"  t{tid}: rms={rms:.4f}  {db:6.1f} dBFS |{bar:<40}|{mark}")
+                if args.once:
+                    break
+        except KeyboardInterrupt:
+            print("\nstopped.")
+
+
 def _make_capture(args):
     """백엔드 선택: --alsa 주면 arecord(안정적), 아니면 sounddevice."""
     if args.alsa is not None:
@@ -161,9 +186,11 @@ def main():
     ap.add_argument("--gain", type=float, default=1.0,
                     help="소프트웨어 입력 게인 배수 (녹음이 작을 때, 예: 8.0)")
     ap.add_argument("--dur", type=float, default=1.0, help="버퍼당 녹음 길이 초 (기본 1)")
-    ap.add_argument("--silence-rms", type=float, default=0.01,
-                    help="원시 RMS가 이 값 미만이면 '무음'→normal 처리 (기본 0.01, -v로 rms 확인해 조정)")
+    ap.add_argument("--silence-rms", type=float, default=0.003,
+                    help="원시 RMS가 이 값 미만이면 '무음'→normal 처리 (기본 0.003, --meter로 조정)")
     ap.add_argument("--no-gate", action="store_true", help="에너지 게이트 비활성화")
+    ap.add_argument("--meter", action="store_true",
+                    help="RMS/dBFS 미터 (소리 내며 관찰 → --silence-rms 결정. 추론/SPI 없음)")
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="단계별 로그(샘플 수·peak·rms·지연) 출력")
     ap.add_argument("--list-mics", action="store_true", help="입력 장치 목록 출력 후 종료")
@@ -186,7 +213,9 @@ def main():
             print(f"sounddevice unavailable: {e}")
         return
 
-    if args.dry_run:
+    if args.meter:
+        run_meter(args)
+    elif args.dry_run:
         run_dry(args)
     else:
         run_fpga(args)
