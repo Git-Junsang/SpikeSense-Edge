@@ -59,7 +59,7 @@ def run_dry(args):
                 print(_fmt(tid, label, mem, extra=f"  [seg {i}]"))
         return
 
-    if args.devices is not None:
+    if args.alsa is not None or args.devices is not None:
         _stream_loop(args, infer=infer, spi=None)
         return
 
@@ -74,15 +74,27 @@ def run_dry(args):
 
 # ── FPGA 모드 / 마이크 스트리밍 ───────────────────────────────
 
+def _make_capture(args):
+    """백엔드 선택: --alsa 주면 arecord(안정적), 아니면 sounddevice."""
+    if args.alsa is not None:
+        return cm.ArecordCapture(alsa_devices=args.alsa, dur_s=args.dur,
+                                 gain=args.gain, verbose=args.verbose)
+    devices = args.devices if args.devices else [None]
+    return cm.MicCapture(devices=devices, gain=args.gain, verbose=args.verbose)
+
+
 def _stream_loop(args, infer, spi):
     """마이크 N트랙을 캡처해 SPI 전송(spi 있으면) + numpy 추론(infer 있으면)."""
-    devices = args.devices if args.devices else [None]
-    print(f"  {len(devices)} track(s)  (devices {devices})  Ctrl-C to stop")
-    with cm.MicCapture(devices=devices) as mics:
+    mics = _make_capture(args)
+    n = len(mics.devices)
+    print(f"  {n} track(s)  Ctrl-C to stop")
+    print("  warming up (librosa first-call) ...", flush=True)
+    cm.warmup()   # 첫 추론 ~15초 지연을 시작 시점으로 이동
+    with mics:
         try:
             while True:
-                # 녹음(블로킹) 동안 listening 표시 — flush로 즉시 보이게
-                print("  🎧 listening... (~1s)", end="\r", flush=True)
+                # 녹음 동안 listening 표시 — flush로 즉시 보이게
+                print("  🎧 listening... (~1s)        ", end="\r", flush=True)
                 t0 = time.time()
                 segs = mics.read_segments()
                 for track_id, seg in segs:
@@ -94,7 +106,7 @@ def _stream_loop(args, infer, spi):
                         print(_fmt(track_id, label, mem,
                                    extra=f"  ({latency:.0f}ms)") + " " * 8)
                 if infer is None:
-                    print(f"  sent {len(devices)} track(s) → check board LED[track]" + " " * 8)
+                    print(f"  sent {n} track(s) → check board LED[track]" + " " * 8)
                 if args.once:
                     break
         except KeyboardInterrupt:
@@ -111,8 +123,8 @@ def run_fpga(args):
     if args.monitor:
         print("  --monitor: also print prediction via NumPy shadow inference")
     with spi_cls(bus=args.bus, device=args.cs, speed_hz=args.speed) as spi:
-        if args.devices is None:
-            print("  ⚠️ --devices not set → using default input device")
+        if args.devices is None and args.alsa is None:
+            print("  ⚠️ no --devices/--alsa → using default input device")
         _stream_loop(args, infer=infer, spi=spi)
 
 
@@ -124,7 +136,14 @@ def main():
     ap.add_argument("--from-wav", nargs="+", metavar="WAV",
                     help="dry-run 입력 WAV (트랙별 1개)")
     ap.add_argument("--devices", nargs="+", type=int, metavar="IDX",
-                    help="USB 마이크 장치 인덱스 (트랙 순서대로)")
+                    help="USB 마이크 장치 인덱스 (sounddevice 백엔드, 트랙 순서대로)")
+    ap.add_argument("--alsa", nargs="+", metavar="DEV",
+                    help="ALSA 장치로 arecord 백엔드 사용 (예: plughw:2,0). Pi 권장")
+    ap.add_argument("--gain", type=float, default=1.0,
+                    help="소프트웨어 입력 게인 배수 (녹음이 작을 때, 예: 8.0)")
+    ap.add_argument("--dur", type=float, default=1.0, help="버퍼당 녹음 길이 초 (기본 1)")
+    ap.add_argument("-v", "--verbose", action="store_true",
+                    help="단계별 로그(샘플 수·peak·rms·지연) 출력")
     ap.add_argument("--list-mics", action="store_true", help="입력 장치 목록 출력 후 종료")
     ap.add_argument("--monitor", action="store_true",
                     help="FPGA 모드에서 numpy 그림자 추론 결과도 표시")

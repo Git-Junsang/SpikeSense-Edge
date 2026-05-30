@@ -103,11 +103,13 @@ class MicCapture:
     # 16k 직접 지원이 안 될 때 시도할 후보 (높은 품질 순)
     _SR_CANDIDATES = (SR, 48000, 44100, 32000, 22050, 16000)
 
-    def __init__(self, devices=None):
+    def __init__(self, devices=None, gain=1.0, verbose=False):
         import sounddevice as sd
         self._sd = sd
         # devices=None → 시스템 기본 입력 1개
         self.devices = devices if devices is not None else [None]
+        self.gain = gain
+        self.verbose = verbose
         self.cap_srs = [self._pick_samplerate(dev) for dev in self.devices]
         # 각 트랙: 16kHz 기준 SEG_SAMPLES와 같은 길이(시간)를 캡처 레이트로 환산
         self.blocks = [int(round(SEG_SAMPLES * sr / SR)) for sr in self.cap_srs]
@@ -196,11 +198,105 @@ class MicCapture:
         out = []
         for tid, (dev, sr, blk) in enumerate(zip(self.devices, self.cap_srs, self.blocks)):
             y = self._record(dev, sr, blk)
+            if self.gain != 1.0:
+                y = np.clip(y * self.gain, -1.0, 1.0)
+            if self.verbose:
+                pk = float(np.max(np.abs(y))) if len(y) else 0.0
+                rms = float(np.sqrt(np.mean(y ** 2))) if len(y) else 0.0
+                print(f"  [t{tid}] {len(y)} smp @ {sr}Hz  peak={pk:.4f} rms={rms:.4f}"
+                      f"{'  ⚠ 매우 작음(게인↑)' if pk < 0.02 else ''}", flush=True)
             if sr != SR:
                 g = gcd(SR, sr)
                 y = resample_poly(y, SR // g, sr // g)
             out.append((tid, waveform_to_segment(y)))
         return out
+
+
+# ── arecord(ALSA) 기반 캡처 — PortAudio가 불안정한 Pi용 ────────
+
+class ArecordCapture:
+    """`arecord` 서브프로세스로 고정 길이 녹음. PortAudio(sounddevice)가 데이터를
+    안 주고 무한 대기하는 환경에서 안정적인 대안.
+
+    plughw 장치를 16kHz로 직접 녹음 → ALSA가 리샘플하므로 scipy 불필요.
+    track_id = alsa_devices 리스트 인덱스.
+    """
+
+    def __init__(self, alsa_devices=None, dur_s=1.0, gain=1.0, verbose=False):
+        self.devices = alsa_devices if alsa_devices else [self.autodetect()]
+        self.dur_s = max(1, int(round(dur_s)))    # arecord -d 는 정수 초
+        self.gain = gain
+        self.verbose = verbose
+
+    @staticmethod
+    def autodetect():
+        """`arecord -l`에서 첫 캡처 장치 → 'plughw:CARD,DEV' 문자열."""
+        import subprocess, re
+        out = subprocess.run(["arecord", "-l"], capture_output=True,
+                             text=True).stdout
+        m = re.search(r"card (\d+):.*?device (\d+):", out)
+        if not m:
+            raise RuntimeError("arecord -l: 캡처 장치를 찾을 수 없음")
+        return f"plughw:{m.group(1)},{m.group(2)}"
+
+    def __enter__(self):
+        for tid, dev in enumerate(self.devices):
+            print(f"  mic track{tid} (arecord {dev}): 16kHz")
+        return self
+
+    def __exit__(self, *exc):
+        pass
+
+    def _record(self, dev):
+        """arecord로 dur_s초 raw PCM(S16_LE mono 16k) 캡처 → float[-1,1]."""
+        import subprocess
+        cmd = ["arecord", "-q", "-D", dev, "-f", "S16_LE", "-c", "1",
+               "-r", str(SR), "-t", "raw", "-d", str(self.dur_s)]
+        try:
+            p = subprocess.run(cmd, capture_output=True,
+                               timeout=self.dur_s * 3 + 5)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"arecord timed out on {dev} (장치 무응답)")
+        if p.returncode != 0:
+            raise RuntimeError(
+                f"arecord 실패({dev}): {p.stderr.decode(errors='ignore')[:200]}")
+        y = np.frombuffer(p.stdout, dtype="<i2").astype(np.float32) / 32768.0
+        if self.gain != 1.0:
+            y = np.clip(y * self.gain, -1.0, 1.0)
+        return y
+
+    def read_segments(self):
+        out = []
+        for tid, dev in enumerate(self.devices):
+            t0 = _now()
+            if self.verbose:
+                print(f"  [t{tid}] recording {self.dur_s}s @ {dev} ...",
+                      flush=True)
+            y = self._record(dev)
+            if self.verbose:
+                pk = float(np.max(np.abs(y))) if len(y) else 0.0
+                rms = float(np.sqrt(np.mean(y ** 2))) if len(y) else 0.0
+                dt = (_now() - t0) * 1000 if t0 is not None else -1
+                print(f"  [t{tid}] {len(y)} smp  peak={pk:.4f} rms={rms:.4f}"
+                      f"  ({dt:.0f}ms){'  ⚠ 매우 작음(게인↑ 필요)' if pk < 0.02 else ''}",
+                      flush=True)
+            out.append((tid, waveform_to_segment(y)))
+        return out
+
+
+def _now():
+    """time.time() — Date 의존 회피용 헬퍼 (모듈 상단 import 불필요화)."""
+    import time
+    return time.time()
+
+
+def warmup():
+    """librosa import + 첫 Mel 연산을 미리 수행.
+
+    Pi에서 librosa 첫 호출(import numba/scipy + JIT)이 ~15초 걸려 첫 추론이 멈춘 듯
+    보인다. 루프 진입 전에 더미 입력으로 한 번 돌려 그 비용을 시작 시점으로 옮긴다.
+    """
+    waveform_to_segment(np.zeros(SEG_SAMPLES, np.float32))
 
 
 if __name__ == "__main__":
@@ -210,3 +306,7 @@ if __name__ == "__main__":
             print(f"  [{idx}] {name}")
     except Exception as e:
         print(f"sounddevice unavailable: {e}")
+    try:
+        print(f"arecord 기본 장치: {ArecordCapture.autodetect()}")
+    except Exception as e:
+        print(f"arecord unavailable: {e}")
