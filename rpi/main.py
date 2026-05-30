@@ -81,7 +81,8 @@ def run_meter(args):
     print("=" * 56)
     print("RMS METER — 소리 내며 rms/dBFS 관찰 → --silence-rms 결정")
     print(f"  현재 게이트선: --silence-rms={args.silence_rms}  (이 위로 올라가면 감지)")
-    print("  ⚠ 마이크 증폭은 alsamixer/amixer로 (소프트 --gain은 게이트 민감도 안 바뀜)")
+    print("  TIP: 정적 rms와 목표소리 rms를 보고 그 사이로 --silence-rms 설정")
+    print("       (증폭 불필요 — 모델은 스케일 불변. ALSA 게인 컨트롤 없어도 무방)")
     print("=" * 56)
     cm.warmup()
     with mics:
@@ -186,8 +187,8 @@ def main():
     ap.add_argument("--gain", type=float, default=1.0,
                     help="소프트웨어 입력 게인 배수 (녹음이 작을 때, 예: 8.0)")
     ap.add_argument("--dur", type=float, default=1.0, help="버퍼당 녹음 길이 초 (기본 1)")
-    ap.add_argument("--silence-rms", type=float, default=0.003,
-                    help="원시 RMS가 이 값 미만이면 '무음'→normal 처리 (기본 0.003, --meter로 조정)")
+    ap.add_argument("--silence-rms", type=float, default=0.002,
+                    help="원시 RMS가 이 값 미만이면 '무음'→normal 처리 (기본 0.002≈-54dBFS, --meter로 조정)")
     ap.add_argument("--no-gate", action="store_true", help="에너지 게이트 비활성화")
     ap.add_argument("--meter", action="store_true",
                     help="RMS/dBFS 미터 (소리 내며 관찰 → --silence-rms 결정. 추론/SPI 없음)")
