@@ -111,20 +111,17 @@ def _make_capture(args):
 
 def _stream_loop(args, infer, spi):
     """마이크 N트랙을 캡처해 SPI 전송(spi 있으면) + numpy 추론(infer 있으면)."""
+    from snn_infer import LeakyJudge
     mics = _make_capture(args)
     n = len(mics.devices)
     print(f"  {n} track(s)  Ctrl-C to stop")
-    # 에너지 게이트: 원시 RMS < silence_rms 면 '무음' → normal 벡터 전송(LED off 유지).
-    # per-buffer 정규화가 정적 노이즈를 풀스케일로 증폭해 도메인 밖 오탐을 내는 것을 차단.
+    # 에너지 게이트: 원시 RMS < silence_rms 면 '무음' → 아무것도 전송하지 않음(skip).
+    # 정적 노이즈를 보내지 않으니 도메인 밖 오탐도 없고, FPGA 카운터도 건드리지 않는다.
+    # (normal 벡터를 보내면 cnt_n이 누적돼 이후 이상이 cnt_a>cnt_n을 못 넘는 부작용 → 전송 안 함)
     # 시끄러운 산업 현장에선 RMS가 항상 높아 게이트가 동작하지 않음(무해).
     gate = not args.no_gate
-    norm_vec = None
-    if gate:
-        import numpy as _np
-        p = os.path.join(args.weights_dir, "golden", "hw_normal_mel.npy")
-        norm_vec = _np.load(p).astype(_np.int8) if os.path.exists(p) else None
-        if norm_vec is None:
-            print("  ⚠ hw_normal_mel.npy 없음 → 게이트는 전송 생략으로 동작")
+    # FPGA anomaly_judge_mult와 동일한 섀도우 카운터 (--monitor 시 LED 예측 표시)
+    shadow = {tid: LeakyJudge() for tid in range(n)}
     print("  warming up ...", flush=True)
     cm.warmup()   # mel 필터뱅크 로드 + 첫 FFT (순수 numpy라 즉시)
     with mics:
@@ -135,22 +132,22 @@ def _stream_loop(args, infer, spi):
                 t0 = time.time()
                 segs = mics.read_segments()
                 for track_id, seg, rms in segs:
-                    silent = gate and rms < args.silence_rms
-                    if silent:
-                        # 무음: normal 벡터로 LED를 끈 상태 유지 (오탐 억제)
-                        if spi is not None and norm_vec is not None:
-                            spi.send_segment(track_id, norm_vec)
+                    if gate and rms < args.silence_rms:
+                        # 무음: 전송·카운터 갱신 모두 생략 (FPGA·섀도우 모두 hold)
                         print(f"  track {track_id:2d}: 🔇 silent (gated, rms={rms:.4f})"
                               + " " * 8)
                         continue
                     if spi is not None:
                         spi.send_segment(track_id, seg)
                     if infer is not None:
-                        label, mem = infer.predict(seg)
+                        # FPGA와 동일하게 spk로 Leaky Counter 갱신 → LED 예측
+                        mem, spk = infer.forward(seg)
+                        sh = shadow[track_id]; sh.update(spk)
+                        led = "🔴 LED ON" if sh.led else "⚫ off"
                         latency = (time.time() - t0) * 1000
-                        print(_fmt(track_id, label, mem,
-                                   extra=f"  rms={rms:.3f} ({latency:.0f}ms)") + " " * 4)
-                if infer is None and not all(gate and r < args.silence_rms for _, _, r in segs):
+                        print(f"  track {track_id:2d}: {led}  cnt_a={sh.cnt_a} cnt_n={sh.cnt_n}"
+                              f"  rms={rms:.3f} ({latency:.0f}ms)" + " " * 4)
+                if infer is None and any(not (gate and r < args.silence_rms) for _, _, r in segs):
                     print(f"  sent {n} track(s) → check board LED[track]" + " " * 8)
                 if args.once:
                     break
@@ -166,7 +163,8 @@ def run_fpga(args):
     spi_cls = MockSpi if args.mock_spi else FpgaSpi
     infer = SnnInfer(args.weights_dir) if args.monitor else None
     if args.monitor:
-        print("  --monitor: also print prediction via NumPy shadow inference")
+        print("  --monitor: FPGA와 동일한 Leaky Counter 섀도우로 LED 예측 표시")
+        print("            (보드 CPU_RESETN 직후 시작하면 보드 LED와 정렬)")
     with spi_cls(bus=args.bus, device=args.cs, speed_hz=args.speed) as spi:
         if args.devices is None and args.alsa is None:
             print("  ⚠️ no --devices/--alsa → using default input device")

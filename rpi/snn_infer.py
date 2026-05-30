@@ -85,6 +85,30 @@ class SnnInfer:
         return int(np.argmax(mem_mean)), mem_mean
 
 
+class LeakyJudge:
+    """FPGA anomaly_judge_mult와 동일한 트랙별 Leaky Counter 섀도우.
+
+    HW 규칙: cnt = cnt - (cnt >> SHIFT_N) + spike  (타임스텝마다),
+             LED(anomaly_flag) = (cnt_a > cnt_n).
+    전역(버퍼 경계 무관) 누적이라, 보드 CPU_RESETN 직후 main을 시작하면 보드 LED와 정렬된다.
+    """
+
+    def __init__(self, shift_n=14):
+        self.shift_n = shift_n
+        self.cnt_n = 0
+        self.cnt_a = 0
+
+    def update(self, spk_L3):
+        """spk_L3 [T,2] (n0=정상, n1=이상)을 타임스텝 순서로 누적."""
+        for t in range(spk_L3.shape[0]):
+            self.cnt_n += int(spk_L3[t, 0]) - (self.cnt_n >> self.shift_n)
+            self.cnt_a += int(spk_L3[t, 1]) - (self.cnt_a >> self.shift_n)
+
+    @property
+    def led(self):
+        return self.cnt_a > self.cnt_n
+
+
 if __name__ == "__main__":
     # 골든 벡터로 RTL bit-exact 자체 점검 (라벨이 아니라 막전위/스파이크 일치 여부)
     infer = SnnInfer()
