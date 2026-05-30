@@ -111,12 +111,6 @@ class MicCapture:
         self.cap_srs = [self._pick_samplerate(dev) for dev in self.devices]
         # 각 트랙: 16kHz 기준 SEG_SAMPLES와 같은 길이(시간)를 캡처 레이트로 환산
         self.blocks = [int(round(SEG_SAMPLES * sr / SR)) for sr in self.cap_srs]
-        # blocksize는 기본(0)으로 둔다 — PortAudio가 작은 주기로 받고 read(blk)가 누적.
-        # ~1초치(수만 프레임)를 stream blocksize로 고정하면 ALSA 버퍼를 못 채워 블로킹됨.
-        self.streams = [
-            sd.InputStream(device=dev, channels=1, samplerate=sr, dtype="float32")
-            for dev, sr in zip(self.devices, self.cap_srs)
-        ]
         for dev, sr in zip(self.devices, self.cap_srs):
             note = "" if sr == SR else " → resample to 16kHz"
             print(f"  mic {dev}: capturing at {sr}Hz{note}")
@@ -150,16 +144,48 @@ class MicCapture:
         return out
 
     def __enter__(self):
-        for s in self.streams:
-            s.start()
         return self
 
     def __exit__(self, *exc):
-        for s in self.streams:
-            s.stop(); s.close()
+        try:
+            self._sd.stop()
+        except Exception:
+            pass
+
+    def _record(self, dev, sr, blk):
+        """sd.rec로 blk 프레임 고정 녹음 + 워치독 타임아웃.
+
+        InputStream.read는 '데이터 올 때까지 무한 대기'라 마이크/ALSA가 프레임을
+        안 주면 영영 안 돌아온다. sd.rec는 디바이스 클럭 기준 고정 길이라 무음이라도
+        끝난다. 그래도 장치가 완전히 멈춰있을 때를 대비해 스레드 타임아웃으로 보호.
+        """
+        import threading
+        sd = self._sd
+        box = {}
+
+        def worker():
+            try:
+                rec = sd.rec(blk, samplerate=sr, channels=1, dtype="float32", device=dev)
+                sd.wait()
+                box["y"] = rec[:, 0]
+            except Exception as e:
+                box["err"] = e
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        timeout = blk / sr * 3.0 + 2.0          # 기대 길이의 3배 + 2초
+        t.join(timeout)
+        if t.is_alive():
+            sd.stop()
+            raise RuntimeError(
+                f"mic {dev}: recording timed out (no audio from device). "
+                f"`arecord -l`로 장치 확인 / 케이블·권한(spi,audio 그룹) 점검")
+        if "err" in box:
+            raise box["err"]
+        return box["y"]
 
     def read_segments(self):
-        """모든 트랙에서 1버퍼씩 읽어 [(track_id, seg[31,40] int8), ...] 반환.
+        """모든 트랙에서 1버퍼씩 녹음해 [(track_id, seg[31,40] int8), ...] 반환.
 
         캡처 레이트 ≠ 16kHz면 16kHz로 리샘플링 후 Mel 변환한다.
         리샘플은 scipy 폴리페이즈(resample_poly) 사용 — librosa.resample의 numba
@@ -168,9 +194,8 @@ class MicCapture:
         from math import gcd
         from scipy.signal import resample_poly
         out = []
-        for tid, (s, sr, blk) in enumerate(zip(self.streams, self.cap_srs, self.blocks)):
-            frames, _ = s.read(blk)
-            y = frames[:, 0]
+        for tid, (dev, sr, blk) in enumerate(zip(self.devices, self.cap_srs, self.blocks)):
+            y = self._record(dev, sr, blk)
             if sr != SR:
                 g = gcd(SR, sr)
                 y = resample_poly(y, SR // g, sr // g)
