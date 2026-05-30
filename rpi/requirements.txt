@@ -1,0 +1,11 @@
+# SpikeSense-Edge — RPi5 소프트웨어 의존성 (Phase 7)
+# 설치: pip install -r requirements.txt
+#
+# 참고: spidev / sounddevice 는 실제 RPi5(또는 마이크 연결 환경)에서만 필요.
+#       --dry-run 검증은 numpy + librosa + soundfile 만으로 동작한다.
+
+numpy>=1.24
+librosa>=0.10        # Mel Spectrogram (학습과 동일 파라미터)
+soundfile>=0.12      # WAV 파일 입력(--from-wav, --dry-run)
+sounddevice>=0.4     # USB 마이크 실시간 캡처 (PortAudio)
+spidev>=3.6          # FPGA SPI 전송 (RPi5 전용)

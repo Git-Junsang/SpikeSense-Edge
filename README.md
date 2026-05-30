@@ -80,12 +80,13 @@ SpikeSense-Edge/
 │   ├── testbench/              # 테스트벤치 .v 소스
 │   └── sim/                    # 컴파일 결과물 (.gitignore)
 │
-├── rpi/                        # RPi5 소프트웨어 (Phase 7~9)
-│   ├── requirements.txt        # sounddevice, librosa, spidev, numpy
-│   ├── capture_mel.py          # USB 마이크 2채널 캡처 + Mel 변환
-│   ├── fpga_spi.py             # SPI 드라이버 (41바이트 패킷)
-│   ├── main.py                 # 메인 루프 (2채널 파이프라인)
-│   └── demo.py                 # 터미널 UI 데모
+├── rpi/                        # RPi5 소프트웨어 (Phase 7 완료 / 데모 Phase 9)
+│   ├── requirements.txt        # numpy, librosa, soundfile, sounddevice, spidev
+│   ├── capture_mel.py          # USB 마이크 N트랙 캡처 + Mel INT8 변환
+│   ├── snn_infer.py            # NumPy INT8 추론 (dry-run, RTL bit-exact)
+│   ├── fpga_spi.py             # SPI 드라이버 (41바이트 패킷, track_id)
+│   ├── main.py                 # 메인 루프 (다중 트랙 파이프라인, --dry-run)
+│   └── demo.py                 # 터미널 UI 데모 (Phase 9 예정)
 │
 └── CLAUDE.md                   # AI 코딩 보조 가이드
 ```
@@ -148,7 +149,7 @@ python test_model_numpy.py
 > 단일 데이터패스를 N트랙이 공유(트랙별 막전위·이상카운터만 복제). 50MHz 합성·구현·비트스트림 완주 → **WNS +4.072ns(타이밍 닫힘)**, LUT 2,033·FF 4,605·BRAM36 12·DSP 1.  
 > 검증: iverilog(tb_mult_snn_top 496/496, tb_mult_spi_top 8/8, tb_mult_selftest PASS) + **보드 자가진단(mult_selftest_top) 실리콘 PASS** — RPi 없이 골든 입력으로 LED15 점등 확인.  
 > ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시).  
-> Phase 7~9: RPi5 소프트웨어(다중트랙 track_id) → 통합 → 데모.
+> **Phase 7 완료** — RPi5 소프트웨어(`rpi/`): 다중트랙 Mel→SPI 전송 + numpy `--dry-run`(골든 bit-exact PASS). Phase 8~9: 실제 보드 통합 → 데모.
 
 ### RTL 설계 사양 (`hardware/src/`)
 
@@ -324,12 +325,14 @@ mkdir -p hardware/sim
 - [x] **50MHz 합성·구현·비트스트림 완주** (Vivado 2025.2): **WNS +4.072ns**(타이밍 닫힘), **LUT 2,033 / FF 4,605 / BRAM36 12 / DSP 1** (듀얼 대비 LUT·FF·DSP↓, 막전위 BRAM↑). 0 Warnings.
 - [x] **보드 자가진단** — [mult_selftest_top.v](hardware/src/mult_selftest_top.v) + [create_project_selftest.tcl](hardware/fpga/create_project_selftest.tcl): RPi 없이 칩 안 골든 anomaly로 출력 스파이크 62개 자체 비교 → **실제 보드 PASS (LED15 점등)**. iverilog [tb_mult_selftest.v](hardware/testbench/tb_mult_selftest.v)로도 PASS 확인. `mult_snn_top`에 관찰용 `dbg_*` 출력 추가(mult_spi_top 미연결).
 
-**Phase 7 — RPi5 소프트웨어** ⬜ 예정
+**Phase 7 — RPi5 소프트웨어** ✅ 완료
 > ⚠️ 시분할 다중트랙이므로 SPI 패킷 첫 바이트에 **track_id(0~N-1)** 를 실어야 함 (포맷 41B 동일, 기존 2채널 0/1 → N트랙 확장).
-- [ ] `rpi/capture_mel.py` — USB 마이크 캡처 + Mel INT8 변환 (다중 트랙)
-- [ ] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 10MHz, track_id 전송)
-- [ ] `rpi/main.py` — 2채널 실시간 파이프라인 (레이턴시 목표 ≤ 550ms)
-- [ ] `--dry-run` 모드 — FPGA 없이 numpy 추론으로 파이프라인 검증
+> ⚠️ 현재 RTL은 **수신 전용(MOSI)** — MISO 리드백 경로 없음. 이상 판정은 보드 LED[track]로만 관찰되며, RPi 터미널 표시는 `--monitor`(numpy 그림자 추론)로 제공.
+- [x] `rpi/capture_mel.py` — USB 마이크 N트랙 캡처 + Mel INT8 변환 (학습 `extract_mel_spectrogram`과 1:1 동일 전처리, `MicCapture`/`wav_to_segments`)
+- [x] `rpi/fpga_spi.py` — SPI 드라이버 (spidev, 10MHz, mode 0, 41B 패킷 `[track_id][mel×40]`, `MockSpi` 더미 포함)
+- [x] `rpi/snn_infer.py` — NumPy INT8 추론 (hex 가중치 로드, **골든 벡터 RTL bit-exact PASS** — PyTorch 불필요)
+- [x] `rpi/main.py` — 다중 트랙 실시간 파이프라인 (FPGA 모드 + `--monitor` numpy 그림자, `--dry-run`, `--from-wav`, `--list-mics`)
+- [x] `--dry-run` 모드 — FPGA 없이 numpy 추론으로 전 파이프라인 검증 (골든/ WAV / 마이크 입력)
 
 **Phase 8 — 하드웨어 통합 테스트** ⬜ 예정
 - [ ] SPI 파형 확인 (RPi5 → Nexys A7 배선 검증)
