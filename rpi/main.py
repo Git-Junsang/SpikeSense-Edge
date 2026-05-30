@@ -29,11 +29,11 @@ import numpy as np
 import capture_mel as cm
 from snn_infer import SnnInfer, DEFAULT_WEIGHTS
 
-LABELS = {0: "정상", 1: "이상"}
+LABELS = {0: "NORMAL", 1: "ANOMALY"}
 
 
 def _fmt(track_id, label, mem_mean=None, extra=""):
-    tag = "🔴 이상" if label == 1 else "🟢 정상"
+    tag = "🔴 ANOMALY" if label == 1 else "🟢 normal "
     mm = f"  N={mem_mean[0]:6.1f} A={mem_mean[1]:6.1f}" if mem_mean is not None else ""
     return f"  track {track_id:2d}: {tag}{mm}{extra}"
 
@@ -43,7 +43,7 @@ def _fmt(track_id, label, mem_mean=None, extra=""):
 def run_dry(args):
     infer = SnnInfer(args.weights_dir)
     print("=" * 56)
-    print("DRY-RUN — numpy INT8 추론 (FPGA 미사용)")
+    print("DRY-RUN — NumPy INT8 inference (no FPGA)")
     print("=" * 56)
 
     # 입력 소스 결정: WAV > 마이크 > 골든
@@ -51,7 +51,7 @@ def run_dry(args):
         sources = []   # [(track_id, [seg,...]), ...]
         for tid, path in enumerate(args.from_wav):
             segs = cm.wav_to_segments(path)
-            print(f"  track {tid}: {os.path.basename(path)} → {len(segs)} 세그먼트")
+            print(f"  track {tid}: {os.path.basename(path)} → {len(segs)} segments")
             sources.append((tid, segs))
         for tid, segs in sources:
             for i, seg in enumerate(segs):
@@ -64,7 +64,7 @@ def run_dry(args):
         return
 
     # 입력 없음 → 골든 벡터 데모
-    print("  (입력 미지정 → 골든 벡터로 데모)")
+    print("  (no input given → golden-vector demo)")
     gdir = os.path.join(args.weights_dir, "golden")
     for tid, tag in enumerate(["normal", "anomaly"]):
         mel = np.load(os.path.join(gdir, f"{tag}_mel.npy")).astype(np.int8)
@@ -77,39 +77,42 @@ def run_dry(args):
 def _stream_loop(args, infer, spi):
     """마이크 N트랙을 캡처해 SPI 전송(spi 있으면) + numpy 추론(infer 있으면)."""
     devices = args.devices if args.devices else [None]
-    print(f"  트랙 {len(devices)}개  (장치 {devices})  Ctrl-C 종료")
+    print(f"  {len(devices)} track(s)  (devices {devices})  Ctrl-C to stop")
     with cm.MicCapture(devices=devices) as mics:
         try:
             while True:
+                # 녹음(블로킹) 동안 listening 표시 — flush로 즉시 보이게
+                print("  🎧 listening... (~1s)", end="\r", flush=True)
                 t0 = time.time()
-                for track_id, seg in mics.read_segments():
+                segs = mics.read_segments()
+                for track_id, seg in segs:
                     if spi is not None:
                         spi.send_segment(track_id, seg)
                     if infer is not None:
                         label, mem = infer.predict(seg)
                         latency = (time.time() - t0) * 1000
                         print(_fmt(track_id, label, mem,
-                                   extra=f"  ({latency:.0f}ms 처리)"))
+                                   extra=f"  ({latency:.0f}ms)") + " " * 8)
                 if infer is None:
-                    print(f"  [{len(devices)}트랙 전송] 결과는 보드 LED 확인")
+                    print(f"  sent {len(devices)} track(s) → check board LED[track]" + " " * 8)
                 if args.once:
                     break
         except KeyboardInterrupt:
-            print("\n중지됨.")
+            print("\nstopped.")
 
 
 def run_fpga(args):
     from fpga_spi import FpgaSpi, MockSpi
     print("=" * 56)
-    print("FPGA 모드 — SPI 전송 (결과는 보드 LED[track])")
+    print("FPGA MODE — SPI send (result shown on board LED[track])")
     print("=" * 56)
     spi_cls = MockSpi if args.mock_spi else FpgaSpi
     infer = SnnInfer(args.weights_dir) if args.monitor else None
     if args.monitor:
-        print("  --monitor: numpy 그림자 추론으로 터미널에도 예측 표시")
+        print("  --monitor: also print prediction via NumPy shadow inference")
     with spi_cls(bus=args.bus, device=args.cs, speed_hz=args.speed) as spi:
         if args.devices is None:
-            print("  ⚠️ --devices 미지정 → 기본 입력 1개 사용")
+            print("  ⚠️ --devices not set → using default input device")
         _stream_loop(args, infer=infer, spi=spi)
 
 
@@ -138,7 +141,7 @@ def main():
             for idx, name in cm.MicCapture.list_input_devices():
                 print(f"  [{idx}] {name}")
         except Exception as e:
-            print(f"sounddevice 사용 불가: {e}")
+            print(f"sounddevice unavailable: {e}")
         return
 
     if args.dry_run:

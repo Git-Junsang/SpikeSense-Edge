@@ -5,6 +5,7 @@
 #       --dry-run 검증은 numpy + librosa + soundfile 만으로 동작한다.
 
 numpy>=1.24
+scipy>=1.10          # 폴리페이즈 리샘플(resample_poly) — 실시간 16kHz 변환
 librosa>=0.10        # Mel Spectrogram (학습과 동일 파라미터)
 soundfile>=0.12      # WAV 파일 입력(--from-wav, --dry-run)
 sounddevice>=0.4     # USB 마이크 실시간 캡처 (PortAudio)

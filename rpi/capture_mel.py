@@ -117,8 +117,8 @@ class MicCapture:
             for dev, sr, blk in zip(self.devices, self.cap_srs, self.blocks)
         ]
         for dev, sr in zip(self.devices, self.cap_srs):
-            note = "" if sr == SR else f" → 16kHz 리샘플링"
-            print(f"  마이크 {dev}: {sr}Hz 캡처{note}")
+            note = "" if sr == SR else " → resample to 16kHz"
+            print(f"  mic {dev}: capturing at {sr}Hz{note}")
 
     def _pick_samplerate(self, dev):
         """장치가 실제로 열 수 있는 입력 샘플레이트를 고른다."""
@@ -161,14 +161,18 @@ class MicCapture:
         """모든 트랙에서 1버퍼씩 읽어 [(track_id, seg[31,40] int8), ...] 반환.
 
         캡처 레이트 ≠ 16kHz면 16kHz로 리샘플링 후 Mel 변환한다.
+        리샘플은 scipy 폴리페이즈(resample_poly) 사용 — librosa.resample의 numba
+        JIT 콜드스타트(Pi에서 수십 초)를 회피해 실시간성을 확보한다.
         """
-        import librosa
+        from math import gcd
+        from scipy.signal import resample_poly
         out = []
         for tid, (s, sr, blk) in enumerate(zip(self.streams, self.cap_srs, self.blocks)):
             frames, _ = s.read(blk)
             y = frames[:, 0]
             if sr != SR:
-                y = librosa.resample(y, orig_sr=sr, target_sr=SR)
+                g = gcd(SR, sr)
+                y = resample_poly(y, SR // g, sr // g)
             out.append((tid, waveform_to_segment(y)))
         return out
 
@@ -179,4 +183,4 @@ if __name__ == "__main__":
         for idx, name in MicCapture.list_input_devices():
             print(f"  [{idx}] {name}")
     except Exception as e:
-        print(f"sounddevice 사용 불가: {e}")
+        print(f"sounddevice unavailable: {e}")
