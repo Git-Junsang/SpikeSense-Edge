@@ -91,23 +91,52 @@ def wav_to_segments(path):
 # ── 실시간 멀티 마이크 캡처 ───────────────────────────────────
 
 class MicCapture:
-    """USB 마이크 N개에서 SEG_SAMPLES 길이 버퍼를 블로킹으로 읽는다.
+    """USB 마이크 N개에서 ~992ms 버퍼를 블로킹으로 읽어 16kHz Mel 세그먼트로 만든다.
 
     각 마이크가 하나의 track_id에 매핑된다 (track_id = devices 리스트 인덱스).
     sounddevice(PortAudio)는 객체 생성 시점에만 import → 데스크톱에서도 모듈 로드 가능.
+
+    ⚠️ USB 마이크는 보통 16kHz를 직접 지원하지 않으므로(48k/44.1k만 가능),
+       장치가 지원하는 샘플레이트로 녹음한 뒤 16kHz로 리샘플링한다.
     """
 
-    def __init__(self, devices=None, blocksize=SEG_SAMPLES):
+    # 16k 직접 지원이 안 될 때 시도할 후보 (높은 품질 순)
+    _SR_CANDIDATES = (SR, 48000, 44100, 32000, 22050, 16000)
+
+    def __init__(self, devices=None):
         import sounddevice as sd
         self._sd = sd
         # devices=None → 시스템 기본 입력 1개
         self.devices = devices if devices is not None else [None]
-        self.blocksize = blocksize
+        self.cap_srs = [self._pick_samplerate(dev) for dev in self.devices]
+        # 각 트랙: 16kHz 기준 SEG_SAMPLES와 같은 길이(시간)를 캡처 레이트로 환산
+        self.blocks = [int(round(SEG_SAMPLES * sr / SR)) for sr in self.cap_srs]
         self.streams = [
-            sd.InputStream(device=dev, channels=1, samplerate=SR,
-                           blocksize=blocksize, dtype="float32")
-            for dev in self.devices
+            sd.InputStream(device=dev, channels=1, samplerate=sr,
+                           blocksize=blk, dtype="float32")
+            for dev, sr, blk in zip(self.devices, self.cap_srs, self.blocks)
         ]
+        for dev, sr in zip(self.devices, self.cap_srs):
+            note = "" if sr == SR else f" → 16kHz 리샘플링"
+            print(f"  마이크 {dev}: {sr}Hz 캡처{note}")
+
+    def _pick_samplerate(self, dev):
+        """장치가 실제로 열 수 있는 입력 샘플레이트를 고른다."""
+        sd = self._sd
+        # 1) 장치 기본값 우선 시도
+        try:
+            ds = int(sd.query_devices(dev, "input")["default_samplerate"])
+            cands = (ds,) + self._SR_CANDIDATES
+        except Exception:
+            cands = self._SR_CANDIDATES
+        for sr in cands:
+            try:
+                sd.check_input_settings(device=dev, samplerate=sr,
+                                        channels=1, dtype="float32")
+                return sr
+            except Exception:
+                continue
+        return SR  # 최후 — 그래도 안 되면 열 때 에러로 드러남
 
     @staticmethod
     def list_input_devices():
@@ -129,11 +158,18 @@ class MicCapture:
             s.stop(); s.close()
 
     def read_segments(self):
-        """모든 트랙에서 1버퍼씩 읽어 [(track_id, seg[31,40] int8), ...] 반환."""
+        """모든 트랙에서 1버퍼씩 읽어 [(track_id, seg[31,40] int8), ...] 반환.
+
+        캡처 레이트 ≠ 16kHz면 16kHz로 리샘플링 후 Mel 변환한다.
+        """
+        import librosa
         out = []
-        for tid, s in enumerate(self.streams):
-            frames, _ = s.read(self.blocksize)
-            out.append((tid, waveform_to_segment(frames[:, 0])))
+        for tid, (s, sr, blk) in enumerate(zip(self.streams, self.cap_srs, self.blocks)):
+            frames, _ = s.read(blk)
+            y = frames[:, 0]
+            if sr != SR:
+                y = librosa.resample(y, orig_sr=sr, target_sr=SR)
+            out.append((tid, waveform_to_segment(y)))
         return out
 
 
