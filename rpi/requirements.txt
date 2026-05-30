@@ -2,11 +2,13 @@
 # 설치: pip install -r requirements.txt
 #
 # 참고: spidev / sounddevice 는 실제 RPi5(또는 마이크 연결 환경)에서만 필요.
-#       --dry-run 검증은 numpy + librosa + soundfile 만으로 동작한다.
+#       --dry-run(골든) 검증은 numpy 만으로, --from-wav 는 numpy + soundfile 로 동작한다.
 
-numpy>=1.24
-scipy>=1.10          # 폴리페이즈 리샘플(resample_poly) — 실시간 16kHz 변환
-librosa>=0.10        # Mel Spectrogram (학습과 동일 파라미터)
+numpy>=1.24          # Mel(순수 numpy STFT+필터뱅크)·추론 핵심
+scipy>=1.10          # 폴리페이즈 리샘플(resample_poly) — sounddevice 백엔드/비16k WAV
 soundfile>=0.12      # WAV 파일 입력(--from-wav, --dry-run)
-sounddevice>=0.4     # USB 마이크 실시간 캡처 (PortAudio)
+sounddevice>=0.4     # USB 마이크 실시간 캡처 (PortAudio). arecord 백엔드면 불필요
 spidev>=3.6          # FPGA SPI 전송 (RPi5 전용)
+
+# librosa 불필요: Mel을 numpy로 재구현(Slaney 필터뱅크는 weights/mel_filter_40_1024.npy로 동봉).
+# Python 3.13에서 numba 미지원으로 librosa 설치가 막히는 문제를 회피.

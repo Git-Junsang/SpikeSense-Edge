@@ -81,8 +81,8 @@ SpikeSense-Edge/
 │   └── sim/                    # 컴파일 결과물 (.gitignore)
 │
 ├── rpi/                        # RPi5 소프트웨어 (Phase 7 완료 / 데모 Phase 9)
-│   ├── requirements.txt        # numpy, scipy, librosa, soundfile, sounddevice, spidev
-│   ├── capture_mel.py          # USB 마이크 N트랙 캡처 + Mel INT8 (sounddevice/arecord 백엔드)
+│   ├── requirements.txt        # numpy, scipy, soundfile, sounddevice, spidev (librosa 불필요)
+│   ├── capture_mel.py          # USB 마이크 캡처 + Mel INT8 (순수 numpy, sounddevice/arecord)
 │   ├── snn_infer.py            # NumPy INT8 추론 (dry-run, RTL bit-exact)
 │   ├── fpga_spi.py             # SPI 드라이버 (5MHz, 41B 패킷, track_id, 프레임 간격)
 │   ├── main.py                 # 메인 루프 (다중 트랙 파이프라인, --dry-run)

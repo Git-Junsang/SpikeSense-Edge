@@ -88,8 +88,8 @@ def _stream_loop(args, infer, spi):
     mics = _make_capture(args)
     n = len(mics.devices)
     print(f"  {n} track(s)  Ctrl-C to stop")
-    print("  warming up (librosa first-call) ...", flush=True)
-    cm.warmup()   # 첫 추론 ~15초 지연을 시작 시점으로 이동
+    print("  warming up ...", flush=True)
+    cm.warmup()   # mel 필터뱅크 로드 + 첫 FFT (순수 numpy라 즉시)
     with mics:
         try:
             while True:

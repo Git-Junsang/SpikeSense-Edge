@@ -16,8 +16,10 @@ RPi5에서 오디오를 받아 FPGA가 기대하는 40채널 INT8 Mel 세그먼�
   하나에 대해 min/max를 잡으므로 분포가 약간 다르다 — 스트리밍에선 불가피하며,
   버퍼 길이를 세그먼트(992ms)에 맞춰 그 영향을 최소화한다.
 
-librosa/sounddevice import는 실제 Mel 추출·마이크 캡처 시점까지 지연된다 →
-골든 .npy 기반 dry-run, SPI 전송 경로는 두 패키지 없이도 모듈 로드가 가능하다.
+Mel 추출은 **순수 numpy**로 구현(librosa/numba 불필요) → Python 3.13에서도 동작하고
+과거의 ~15초 콜드스타트가 없다. librosa Slaney 필터뱅크만 미리 추출해 .npy로 동봉
+(mel_filter_40_1024.npy). librosa 경로 대비 int8 max|diff|=1 (mismatch 0.001%)로 검증됨.
+sounddevice/scipy는 실제 마이크 캡처·리샘플 시점까지 import가 지연된다.
 """
 import numpy as np
 
@@ -29,25 +31,57 @@ N_MELS      = 40
 SEG_FRAMES  = 31                       # 31 × 32ms = 992ms (모델 입력 1세그먼트)
 SEG_SAMPLES = SEG_FRAMES * HOP_LENGTH  # 15872 samples ≈ 0.992s
 
+# Mel 필터뱅크(librosa Slaney, 40×513)는 미리 추출해 .npy로 동봉 → 런타임 librosa 불필요.
+# (software/make_hw_test_vectors와 같은 디렉토리: ../hardware/src/weights/)
+import os as _os
+_MEL_BASIS_PATH = _os.path.normpath(_os.path.join(
+    _os.path.dirname(_os.path.abspath(__file__)),
+    "..", "hardware", "src", "weights", "mel_filter_40_1024.npy"))
+# 주기형(periodic) Hann — scipy.signal.get_window('hann', N, fftbins=True)와 동일
+_HANN = (0.5 - 0.5 * np.cos(2 * np.pi * np.arange(N_FFT) / N_FFT)).astype(np.float32)
+_mel_basis = None   # 지연 로드
 
-# ── Mel 추출 ─────────────────────────────────────────────────
+
+def _get_mel_basis():
+    global _mel_basis
+    if _mel_basis is None:
+        _mel_basis = np.load(_MEL_BASIS_PATH).astype(np.float32)   # (40, 513)
+    return _mel_basis
+
+
+# ── Mel 추출 (순수 numpy — librosa/numba 불필요, Python 3.13 OK) ──
+# librosa.feature.melspectrogram + power_to_db(ref=max) 를 numpy로 재현.
+# 검증: MIMII 12파일에서 int8 max|diff|=1, mismatch 0.001% (사실상 동일).
 
 def waveform_to_mel_float(y):
     """1D float 파형 → [T, 40] float32 Mel ([0,1] 정규화). 학습과 1:1 동일."""
-    import librosa
     y = np.asarray(y, dtype=np.float32)
     if y.ndim > 1:
         y = y[:, 0]
     y = y - np.mean(y)
 
-    S = librosa.feature.melspectrogram(
-        y=y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH, n_mels=N_MELS)
-    log_S = librosa.power_to_db(S, ref=np.max)
+    # STFT (center=True, pad=constant, periodic Hann, win=n_fft)
+    pad = N_FFT // 2
+    yp = np.pad(y, (pad, pad), mode="constant")
+    n_fr = 1 + (len(yp) - N_FFT) // HOP_LENGTH
+    idx = np.arange(N_FFT)[None, :] + HOP_LENGTH * np.arange(n_fr)[:, None]
+    frames = yp[idx] * _HANN[None, :]                  # (T, n_fft)
+    spec = np.fft.rfft(frames, n=N_FFT, axis=1)        # (T, 513)
+    power = (spec.real ** 2 + spec.imag ** 2).T        # (513, T)
+
+    S = _get_mel_basis() @ power                       # (40, T)  power=2.0
+
+    # power_to_db(S, ref=np.max, top_db=80)
+    amin, top_db = 1e-10, 80.0
+    ref = S.max()
+    log_S = 10.0 * np.log10(np.maximum(amin, S)) - 10.0 * np.log10(np.maximum(amin, ref))
+    log_S = np.maximum(log_S, log_S.max() - top_db)
+    # 학습 후처리: min 시프트 → max 정규화
     log_S = log_S - np.min(log_S)
     max_val = np.max(log_S)
     if max_val > 1e-8:
         log_S = log_S / max_val
-    return log_S.T.astype(np.float32)          # [T, 40]
+    return log_S.T.astype(np.float32)                  # [T, 40]
 
 
 def mel_float_to_int8(mel_float):
@@ -73,12 +107,14 @@ def waveform_to_segment(y):
 def wav_to_segments(path):
     """WAV 파일 → [N_seg][31,40] int8 세그먼트 리스트 (학습 segment_features와 동일)."""
     import soundfile as sf
-    import librosa
     data, file_sr = sf.read(path)
     if data.ndim > 1:
         data = data[:, 0]
     if file_sr != SR:
-        data = librosa.resample(data, orig_sr=file_sr, target_sr=SR)
+        from math import gcd
+        from scipy.signal import resample_poly
+        g = gcd(SR, int(file_sr))
+        data = resample_poly(data, SR // g, int(file_sr) // g)
     mel = mel_float_to_int8(waveform_to_mel_float(data))
     segs = []
     for start in range(0, len(mel) - SEG_FRAMES + 1, SEG_FRAMES):
@@ -291,10 +327,10 @@ def _now():
 
 
 def warmup():
-    """librosa import + 첫 Mel 연산을 미리 수행.
+    """Mel 필터뱅크 로드 + 첫 FFT 경로를 미리 수행 (순수 numpy라 즉시 끝남).
 
-    Pi에서 librosa 첫 호출(import numba/scipy + JIT)이 ~15초 걸려 첫 추론이 멈춘 듯
-    보인다. 루프 진입 전에 더미 입력으로 한 번 돌려 그 비용을 시작 시점으로 옮긴다.
+    librosa/numba를 쓰지 않으므로 과거의 ~15초 콜드스타트는 없다. 필터뱅크 .npy 로드와
+    첫 rfft 워밍업만 한다.
     """
     waveform_to_segment(np.zeros(SEG_SAMPLES, np.float32))
 
