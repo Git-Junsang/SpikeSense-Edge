@@ -32,7 +32,8 @@ module tb_mult_spi_power;
     localparam N_TRACKS = 4;
     localparam TRK_W    = 2;
     localparam SCK_H    = 100;   // SCK 반주기 100ns → 5MHz (50MHz 도메인 10× 오버샘플)
-    localparam N_TS     = 6;     // 트랙당 인가할 타임스텝 수 (늘리면 활동 표본↑, 시뮬 시간↑)
+    localparam N_TS     = 2;     // 트랙당 인가할 타임스텝 수 (늘리면 활동 표본↑, 시뮬 시간↑)
+                                 // 2×4트랙=8프레임 ≈ sim 2.5ms (timing 시뮬 30분 내 목표)
 
     reg clk = 0;
     always #5 clk = ~clk;        // 100 MHz 입력
@@ -90,7 +91,7 @@ module tb_mult_spi_power;
         for (ts = 0; ts < N_TS; ts = ts + 1)
             for (tr = 0; tr < N_TRACKS; tr = tr + 1) begin
                 spi_send(tr[7:0], ts);
-                #300000;   // 한 타임스텝 처리(~192µs@50MHz) 이상 대기 → 데이터패스 1회 실행
+                #250000;   // 한 타임스텝 처리(~192µs@50MHz) 이상 대기 → 데이터패스 1회 실행
             end
 
         #100000;
