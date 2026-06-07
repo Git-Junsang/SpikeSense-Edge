@@ -23,6 +23,10 @@ software/data_mimii/
 # 실행 로그
 log.txt
 
+# Synology NAS 메타데이터
+@eaDir/
+**/@eaDir/
+
 # study_guide 다이어그램 빌드 부산물 (SVG 결과물은 커밋, 캐시·설정은 제외)
 documents/study_guide/.puppeteer.json
 documents/study_guide/diagrams/.cache/

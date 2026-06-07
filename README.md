@@ -149,8 +149,10 @@ python test_model_numpy.py
 > **현재 상태**: **Phase 6 완료** — 100MHz 타이밍 미달(WNS −5.498ns)을 **다중 트랙 시분할(TDM) @50MHz**로 해결.  
 > 단일 데이터패스를 N트랙이 공유(트랙별 막전위·이상카운터만 복제). 50MHz 합성·구현·비트스트림 완주 → **WNS +4.072ns(타이밍 닫힘)**, LUT 2,033·FF 4,605·BRAM36 12·DSP 1.  
 > 검증: iverilog(tb_mult_snn_top 496/496, tb_mult_spi_top 8/8, tb_mult_selftest PASS) + **보드 자가진단(mult_selftest_top) 실리콘 PASS** — RPi 없이 골든 입력으로 LED15 점등 확인.  
-> ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시).  
-> **Phase 7 완료** — RPi5 소프트웨어(`rpi/`): 다중트랙 Mel→SPI 전송 + numpy `--dry-run`(골든 bit-exact PASS). Phase 8~9: 실제 보드 통합 → 데모.
+> ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시). Vivado 전력 분석(routed) **0.124W**(동적 0.026+정적 0.098).  
+> **Phase 7·8 완료** — RPi5 SW(순수 numpy Mel·에너지 게이트·SPI) + **실보드 SPI 통합 검증**(10채널 sweep 점등·트랙 격리, 라이브 마이크 추론 LED 점등).  
+> ⚠️ **알려진 한계**: 모델이 MIMII/DCASE 도메인 한정 → 라이브 임의음은 정상 쏠림(도메인 불일치). HW 파이프라인 자체는 정상. **Phase 9: 조용한 환경에서 현 모델로 데모(재녹음·재학습 보류)**.  
+> 📄 전체 진행 정리: [documents/PROGRESS.md](documents/PROGRESS.md)
 
 ### RTL 설계 사양 (`hardware/src/`)
 
@@ -335,21 +337,32 @@ mkdir -p hardware/sim
 - [x] `rpi/main.py` — 다중 트랙 실시간 파이프라인 (FPGA 모드 + `--monitor` numpy 그림자, `--dry-run`, `--from-wav`, `--list-mics`)
 - [x] `--dry-run` 모드 — FPGA 없이 numpy 추론으로 전 파이프라인 검증 (골든/ WAV / 마이크 입력)
 
-**Phase 8 — 하드웨어 통합 테스트** 🔧 도구 완성 (실보드 점등 확인 대기)
+**Phase 8 — 하드웨어 통합 테스트** ✅ 완료
 > 마이크/모델 정확도와 **SPI 링크 검증을 분리**: HW 이상판정은 막전위가 아니라 **L3 스파이크 Leaky Counter(`cnt_a>cnt_n`)** 이므로, 그 조건을 확실히 만드는 전용 벡터로 LED를 검증한다. (골든 벡터는 둘 다 LED를 못 켬 — 검증으로 확인)
 - [x] `software/make_hw_test_vectors.py` — `hw_anomaly_mel.npy`(cnt_a=31,cnt_n=0→LED ON) / `hw_normal_mel.npy`(cnt_n=29,cnt_a=2→LED OFF) 생성
 - [x] `rpi/hw_test.py` — SPI 통합 테스트 (`wiring`/`led`/`sweep`), mock 동작 확인
 - [x] **프로토콜 정합성 적대 검증** (멀티에이전트): 패킷 바이트순서·track→LED 매핑·LED 점등논리 PASS. SPI 속도 **10→5MHz**(검증 tb 일치, 마진 확보), 프레임 간격 **500µs→1ms**(busy-drop 방지) 반영
-- [ ] (보드) `hw_test.py wiring` → 로직애널라이저로 SCK/MOSI/CS_n 확인
-- [ ] (보드) `hw_test.py led` → LED1 ON / LED0 OFF 점등 확인 (SPI 링크·디먹스·이상판정 PASS)
-- [ ] (보드) `hw_test.py sweep` → 트랙별 LED 순차 점등 (디먹스 격리)
-- [ ] (보드) 실제 팬 소음 정확도 — ⚠️ 모델은 학습 데이터셋(MIMII) 도메인 한정. 타깃 기계 재학습 필요
+- [x] **(보드) `hw_test.py sweep` → 트랙별 LED 순차 점등** = 10채널 동시 SPI 디먹스·트랙 격리 실증
+- [x] **(보드) 라이브 마이크 추론** (`main.py --alsa`) → LED 점등 = 마이크→Mel→SPI→FPGA→판정 전 경로 동작
+- [x] (보드) `tb_mult_spi_power.v` — 전력 SAIF용 자극 전용 tb (내부참조·hex 없음 → 타이밍 네트리스트 elaborate 가능)
+- ⚠️ 실제 팬 소음 정확도 — 모델이 MIMII/DCASE **도메인 한정**(아래 한계). HW 경로는 정상. 재학습은 보류.
 
-> **테스트 절차**: ① FPGA에 `mult_spi_top` 비트스트림 프로그램 ② 배선(JA1=SCK/JA2=MOSI/JA3=CS_n/GND) ③ `CPU_RESETN`(C12) 눌러 카운터 초기화 ④ RPi `cd rpi && python3 hw_test.py led` → LED 관찰.
+> **테스트 절차**: ① FPGA에 `mult_spi_top` 비트스트림 프로그램 ② 배선(JA1=SCK/JA2=MOSI/JA3=CS_n/GND) ③ `CPU_RESETN`(C12) 초기화 ④ `cd rpi && python3 hw_test.py sweep --tracks 10` → LED0–9 순차 점등 관찰.
 
-**Phase 9 — 데모** ⬜ 예정
-- [ ] `rpi/demo.py` — 터미널 UI (2채널 실시간 상태 표시)
-- [ ] 데모 시연 (이상음 재생 → LED + 터미널 동시 반응 확인)
+**Phase 9 — 데모** ▶ 진행 중 (조용한 환경, 현 모델 그대로)
+> ⚠️ **재녹음·재학습 보류**, 현 MIMII 학습 모델로 시연. 도메인 일치 입력(MIMII 음원 재생/`--from-wav`)으로 정상·이상 구분 시연 권장. 라이브 임의음은 도메인 밖이라 판정 불안정([한계](#알려진-한계--도메인-불일치)).
+- [x] 라이브 데모 경로 동작 — `main.py --alsa plughw:2,0 --monitor` (LED + 터미널 Leaky Counter 예측 동시)
+- [ ] `rpi/demo.py` — 터미널 UI (다채널 실시간 상태 표시)
+- [ ] 데모 시연 (도메인 일치 음원 → LED + 터미널 동시 반응)
+
+---
+
+## 알려진 한계 — 도메인 불일치
+
+- **현상**: 라이브 임의 소리는 대부분 "정상"으로, 조용한 환경에선 정규화 증폭으로 "이상"으로 쏠리는 등 라이브 판정 불안정.
+- **원인**: 모델이 학습 데이터셋(MIMII/DCASE)의 *그 기계 소리*만 학습 → 사용자 환경/마이크/배경은 학습 분포 밖(OOD). per-buffer 정규화 불일치(오프라인 대비 ~10%p)도 가중.
+- **HW 파이프라인은 정상** — MIMII 이상 wav 입력 시 정확히 ANOMALY 검출 확인. 한계는 순수 모델 도메인 문제.
+- **해결 방향**: 타깃 기계로 (재)학습이 근본 해결. 40-128-32-2 + 2출력 + Leaky Counter 구조를 유지하면 **가중치(hex)만 교체**로 적응 가능(RTL 동결). 상세: [documents/PROGRESS.md](documents/PROGRESS.md).
 
 ---
 
