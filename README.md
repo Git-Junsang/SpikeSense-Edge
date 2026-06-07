@@ -147,7 +147,7 @@ python test_model_numpy.py
 ## 하드웨어 (FPGA RTL)
 
 > **현재 상태**: **Phase 6 완료** — 100MHz 타이밍 미달(WNS −5.498ns)을 **다중 트랙 시분할(TDM) @50MHz**로 해결.  
-> 단일 데이터패스를 N트랙이 공유(트랙별 막전위·이상카운터만 복제). 50MHz 합성·구현·비트스트림 완주 → **WNS +4.072ns(타이밍 닫힘)**, LUT 2,033·FF 4,605·BRAM36 12·DSP 1.  
+> 단일 데이터패스를 N트랙이 공유(트랙별 막전위·이상카운터만 복제). 50MHz 합성·구현·비트스트림 완주 → **WNS +4.07ns(타이밍 닫힘)**, LUT 2,007·FF 4,605·BRAM36 12·DSP 1.  
 > 검증: iverilog(tb_mult_snn_top 496/496, tb_mult_spi_top 8/8, tb_mult_selftest PASS) + **보드 자가진단(mult_selftest_top) 실리콘 PASS** — RPi 없이 골든 입력으로 LED15 점등 확인.  
 > ⚠️ Vivado 프로젝트 경로는 **ASCII 필수**(한글 경로면 합성 run 크래시). Vivado 전력 분석(routed) **0.124W**(동적 0.026+정적 0.098).  
 > **Phase 7·8 완료** — RPi5 SW(순수 numpy Mel·에너지 게이트·SPI) + **실보드 SPI 통합 검증**(10채널 sweep 점등·트랙 격리, 라이브 마이크 추론 LED 점등).  
@@ -325,7 +325,7 @@ mkdir -p hardware/sim
 - [x] `mult_spi_top.v` — 보드 최상위 (clk분주 + spi_slave + channel_id=track_id 디먹스 → LED[0..15])
 - [x] `tb_mult_snn_top.v` (496 TC, 4트랙 인터리빙 bit-exact) / `tb_mult_spi_top.v` (8 TC, SPI 통합)
 - [x] Vivado 자동화 ([create_project_mult.tcl](hardware/fpga/create_project_mult.tcl), Top `mult_spi_top`) + [nexys_a7_mult.xdc](hardware/constraints/nexys_a7_mult.xdc) (50MHz 생성클럭)
-- [x] **50MHz 합성·구현·비트스트림 완주** (Vivado 2025.2): **WNS +4.072ns**(타이밍 닫힘), **LUT 2,033 / FF 4,605 / BRAM36 12 / DSP 1** (듀얼 대비 LUT·FF·DSP↓, 막전위 BRAM↑). 0 Warnings.
+- [x] **50MHz 합성·구현·비트스트림 완주** (Vivado 2025.2): **WNS +4.07ns**(타이밍 닫힘), **LUT 2,007 / FF 4,605 / BRAM36 12 / DSP 1** (구현 후/placed; 듀얼 대비 LUT·FF·DSP↓, 막전위 BRAM↑). 0 Warnings.
 - [x] **보드 자가진단** — [mult_selftest_top.v](hardware/src/mult_selftest_top.v) + [create_project_selftest.tcl](hardware/fpga/create_project_selftest.tcl): RPi 없이 칩 안 골든 anomaly로 출력 스파이크 62개 자체 비교 → **실제 보드 PASS (LED15 점등)**. iverilog [tb_mult_selftest.v](hardware/testbench/tb_mult_selftest.v)로도 PASS 확인. `mult_snn_top`에 관찰용 `dbg_*` 출력 추가(mult_spi_top 미연결).
 
 **Phase 7 — RPi5 소프트웨어** ✅ 완료
