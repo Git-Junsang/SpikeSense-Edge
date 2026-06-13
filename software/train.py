@@ -8,6 +8,7 @@ SNN 학습 루프 (v13 - 완벽한 Checkpoint Resume 지원)
 """
 
 import os
+import csv
 import argparse
 import numpy as np
 import torch
@@ -189,15 +190,26 @@ def main():
     parser.add_argument("--n_mels", type=int, default=40)
     parser.add_argument("--segment_ms", type=int, default=992)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--log_csv", type=str, default=None,
+                        help="에포크별 학습곡선 기록 CSV 경로 (기본: <model_name>_history.csv)")
     args = parser.parse_args()
+
+    # ★ 학습 곡선용 에포크 로그 경로 (미지정 시 모델명 기반 자동)
+    log_csv = args.log_csv or (os.path.splitext(args.model_name)[0] + "_history.csv")
+
+    # ★ 고정 seed — train/test split 재현 + evaluate_dcase.py에서 동일 held-out 사용
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
     segment_frames = int(args.segment_ms / ((512 / 16000) * 1000))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     segments, labels = load_mimii_data(args.data_dir, n_mels=args.n_mels, segment_frames=segment_frames)
     indices = np.random.permutation(len(segments))
     n_train = int(len(segments) * 0.8)
-    
+    test_indices = indices[n_train:]
+
     train_loader = DataLoader(MelDataset(segments[indices[:n_train]], labels[indices[:n_train]], is_train=True), batch_size=args.batch_size, shuffle=True, num_workers=4)
     test_loader = DataLoader(MelDataset(segments[indices[n_train:]], labels[indices[n_train:]], is_train=False), batch_size=args.batch_size, shuffle=False, num_workers=4)
 
@@ -237,6 +249,15 @@ def main():
             best_f1 = initial_f1
             print(f"     -> 복원된 초기 최고 F1: {best_f1:.4f}")
 
+    # ★ 학습 곡선 CSV — resume면 이어쓰기(append), 새 학습이면 헤더부터
+    append_log = args.resume and start_epoch > 1 and os.path.exists(log_csv)
+    log_f = open(log_csv, "a" if append_log else "w", newline="")
+    log_writer = csv.writer(log_f)
+    if not append_log:
+        log_writer.writerow(["epoch", "lr", "train_loss", "train_acc",
+                             "test_loss", "test_acc", "test_f1"])
+    print(f"  📈 학습 곡선 기록: {log_csv} ({'append' if append_log else 'new'})")
+
     print("=" * 60)
     print(f"  SNN 학습 루프 시작")
     print("=" * 60)
@@ -244,9 +265,14 @@ def main():
     for epoch in range(start_epoch, args.epochs + 1):
         train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
         test_loss, test_acc, test_f1 = evaluate(model, test_loader, loss_fn, device)
-        
+
+        cur_lr = optimizer.param_groups[0]['lr']
+        log_writer.writerow([epoch, f"{cur_lr:.6f}", f"{train_loss:.6f}", f"{train_acc:.6f}",
+                             f"{test_loss:.6f}", f"{test_acc:.6f}", f"{test_f1:.6f}"])
+        log_f.flush()
+
         if epoch % 5 == 0 or test_f1 > best_f1:
-            print(f"📘 에포크 {epoch:3d} | Train Acc: {train_acc:.2%} | Test Acc: {test_acc:.2%} | F1: {test_f1:.4f} | LR: {optimizer.param_groups[0]['lr']:.6f}")
+            print(f"📘 에포크 {epoch:3d} | Train Acc: {train_acc:.2%} | Test Acc: {test_acc:.2%} | F1: {test_f1:.4f} | LR: {cur_lr:.6f}")
 
         # ★ 체크포인트 형식으로 묶어서 저장
         if test_f1 > best_f1:
@@ -256,11 +282,19 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
-                'best_f1': best_f1
+                'best_f1': best_f1,
+                # ★ held-out 재현용 split 메타 (evaluate_dcase.py가 사용)
+                'split_seed': args.seed,
+                'segment_frames': segment_frames,
+                'n_mels': args.n_mels,
+                'test_indices': test_indices,
             }
             torch.save(checkpoint, args.model_name)
 
         scheduler.step()
+
+    log_f.close()
+    print(f"  ✅ 학습 종료 — 곡선 CSV: {log_csv}")
 
 if __name__ == "__main__":
     main()

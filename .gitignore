@@ -30,3 +30,9 @@ log.txt
 # study_guide 다이어그램 빌드 부산물 (SVG 결과물은 커밋, 캐시·설정은 제외)
 documents/study_guide/.puppeteer.json
 documents/study_guide/diagrams/.cache/
+
+# Windows/Office 임시·캐시 파일
+Thumbs.db
+**/Thumbs.db
+~$*
+**/~$*
