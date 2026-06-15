@@ -10,6 +10,13 @@
 ##   RPi GPIO11 (SCLK) → JA1 ,  GPIO10 (MOSI) → JA2 ,  GPIO8 (CE0) → JA3
 ## ============================================================
 
+## ---- SPI Flash(QSPI) 부팅 설정 (없으면 JTAG은 되나 플래시 부팅 실패) ----
+set_property CFGBVS VCCO                          [current_design]
+set_property CONFIG_VOLTAGE 3.3                   [current_design]
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 1      [current_design]
+set_property BITSTREAM.CONFIG.CONFIGRATE 33       [current_design]
+set_property BITSTREAM.CONFIG.UNUSEDPIN PULLNONE  [current_design]
+
 ## ---- 입력 클럭 100 MHz (E3) + 50 MHz 생성 클럭 ----
 set_property -dict { PACKAGE_PIN E3  IOSTANDARD LVCMOS33 } [get_ports { clk }]
 create_clock -add -name sys_clk -period 10.00 -waveform {0 5} [get_ports { clk }]
