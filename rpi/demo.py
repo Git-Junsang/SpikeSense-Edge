@@ -3,7 +3,7 @@
 시나리오 (사용자 지정):
     Enter를 누를 때마다 한 스텝씩 진행. 각 스텝은 두 트랙에 한 세그먼트씩 전송.
         track0:  이상  정상  정상  이상
-        track1:  정상  이상  정상  정상
+        track1:  정상  이상  정상  이상
 
 각 스텝마다:
   1) RPi가 트랙0·트랙1의 Mel 세그먼트(31타임스텝)를 SPI로 FPGA에 전송
@@ -41,7 +41,7 @@ SEQUENCE = [
     {0: "anomaly", 1: "normal"},   # step1
     {0: "normal",  1: "anomaly"},  # step2
     {0: "normal",  1: "normal"},   # step3
-    {0: "anomaly", 1: "normal"},   # step4
+    {0: "anomaly", 1: "anomaly"},  # step4 (두 트랙 모두 이상)
 ]
 
 
@@ -143,7 +143,7 @@ def main():
     print("SpikeSense-Edge — 2트랙 OLED+LED 데모")
     print("=" * 56)
     print("시퀀스:  track0: 이상 정상 정상 이상")
-    print("         track1: 정상 이상 정상 정상")
+    print("         track1: 정상 이상 정상 이상")
 
     infer = SnnInfer(args.weights_dir)
     segs = load_segments(args.weights_dir, args.normal_wav, args.anomaly_wav)
