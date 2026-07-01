@@ -27,12 +27,12 @@ log.txt
 @eaDir/
 **/@eaDir/
 
-# study_guide 다이어그램 빌드 부산물 (SVG 결과물은 커밋, 캐시·설정은 제외)
-documents/study_guide/.puppeteer.json
-documents/study_guide/diagrams/.cache/
-
 # Windows/Office 임시·캐시 파일
 Thumbs.db
 **/Thumbs.db
 ~$*
 **/~$*
+
+# 로컬 전용 — GitHub 미포함 (발표자료·논문·학습자료 등 문서 일체 + 로컬 개발 가이드)
+/documents/
+/CLAUDE.md
