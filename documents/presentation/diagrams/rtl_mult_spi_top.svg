@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1232" viewBox="-82 0 1232 440" style="max-width:1232px;background:#ffffff;font-family:arial,'liberation sans',helvetica,sans-serif"><defs><marker id="arr" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,4 L0,8 z" fill="#1a1a1a"/></marker></defs>
+<rect x="-82" y="0" width="1232" height="440" fill="#ffffff"/>
+<rect x="55" y="26" width="890" height="384" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.8"/>
+<text x="933" y="51" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="17" font-weight="bold" fill="#1a1a1a" text-anchor="end" style="">mult_spi_top.v</text>
+<text x="1" y="106" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">clk</text>
+<text x="1" y="132" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">rst_n</text>
+<text x="1" y="304" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">sck</text>
+<text x="1" y="332" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">mosi</text>
+<text x="1" y="360" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">cs_n</text>
+<text x="1" y="250" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="12" font-weight="bold" fill="#888" text-anchor="end" style="">SPI (RPi5)</text>
+<rect x="120" y="78" width="128" height="56" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.3"/>
+<text x="184.0" y="125" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="bold" fill="#1a1a1a" text-anchor="middle" style="">clk_div2.v</text>
+<text x="128" y="105.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">clk_in</text>
+<text x="240" y="105.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">clk_out</text>
+<polyline points="10,102 120,102" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="248,102 248,54 615,54" fill="none" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="422.88" y="37" width="94.24000000000001" height="15" fill="#ffffff" opacity="0.93"/>
+<text x="470" y="49" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">clk50 (50 MHz)</text>
+<circle cx="300" cy="54" r="3.4" fill="#1a1a1a"/>
+<polyline points="300,54 300,190" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<circle cx="615" cy="54" r="3.4" fill="#1a1a1a"/>
+<polyline points="615,54 615,150" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="10,128 92,128 92,40 575,40" fill="none" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="360.6" y="24" width="38.800000000000004" height="15" fill="#ffffff" opacity="0.93"/>
+<text x="380" y="36" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">rst_n</text>
+<circle cx="255" cy="40" r="3.4" fill="#1a1a1a"/>
+<polyline points="255,40 255,190" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<circle cx="575" cy="40" r="3.4" fill="#1a1a1a"/>
+<polyline points="575,40 575,150" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="120" y="190" width="210" height="178" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.3"/>
+<text x="225.0" y="220" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#5a6b78" text-anchor="middle" style="">SPI 수신</text>
+<text x="225.0" y="236" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#5a6b78" text-anchor="middle" style="">CPOL0 / CPHA0, 41B</text>
+<text x="225.0" y="359" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="bold" fill="#1a1a1a" text-anchor="middle" style="">spi_slave.v</text>
+<text x="255" y="203" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="9.5" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">rst_n</text>
+<text x="300" y="203" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="9.5" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">clk</text>
+<text x="128" y="303.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">sck</text>
+<text x="128" y="331.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">mosi</text>
+<text x="128" y="359.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">cs_n</text>
+<polyline points="10,300 120,300" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="10,328 120,328" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="10,356 120,356" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<text x="322" y="243.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">mel_out[319:0]</text>
+<text x="322" y="293.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">channel_id[7:0]</text>
+<text x="322" y="333.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">frame_rdy</text>
+<rect x="520" y="150" width="325" height="240" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.8"/>
+<text x="682.5" y="246" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="12.5" font-weight="normal" fill="#5a6b78" text-anchor="middle" style="">PLIF-T SNN 추론 엔진</text>
+<text x="682.5" y="264" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#5a6b78" text-anchor="middle" style="">시분할 다중 트랙 (64)</text>
+<text x="682.5" y="288" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#888" text-anchor="middle" style="font-style:italic;">내부 → mult_snn_top.v 다이어그램</text>
+<text x="682.5" y="381" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="14" font-weight="bold" fill="#1a1a1a" text-anchor="middle" style="">mult_snn_top.v</text>
+<text x="575" y="164" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="9.5" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">rst_n</text>
+<text x="615" y="164" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="9.5" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">clk</text>
+<text x="528" y="243.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">mel_in[319:0]</text>
+<text x="528" y="293.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">track_id[5:0]</text>
+<text x="528" y="333.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">frame_valid</text>
+<text x="837" y="203.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">anomaly_flags[63:0]</text>
+<text x="837" y="248.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">busy</text>
+<text x="837" y="288.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">dbg_spk_normal</text>
+<text x="837" y="313.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">dbg_spk_anomaly</text>
+<text x="837" y="338.5" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="end" style="">dbg_ts_done</text>
+<polyline points="330,240 520,240" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="393.0" y="224" width="64.0" height="14" fill="#ffffff" opacity="0.93"/>
+<text x="425.0" y="235" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">mel[319:0]</text>
+<polyline points="330,290 520,290" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="348.2" y="274" width="153.60000000000002" height="14" fill="#ffffff" opacity="0.93"/>
+<text x="425.0" y="285" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">track_id = channel_id[5:0]</text>
+<polyline points="330,330 520,330" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="331.4" y="314" width="187.20000000000002" height="14" fill="#ffffff" opacity="0.93"/>
+<text x="425.0" y="325" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">frame_valid = frame_rdy &amp; (ch&lt;N)</text>
+<polyline points="845,200 993,200" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="864.6" y="184" width="80.80000000000001" height="14" fill="#ffffff" opacity="0.93"/>
+<text x="905" y="195" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#1a1a1a" text-anchor="middle" style="">= flags[15:0]</text>
+<text x="1002" y="204" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="13" font-weight="bold" fill="#1a1a1a" text-anchor="start" style="">led[15:0]</text>
+<text x="1002" y="216" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#888" text-anchor="start" style="">→ LED0..15</text>
+<polyline points="845,245 871,245" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="845,285 871,285" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="845,310 871,310" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<polyline points="845,335 871,335" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<text x="877" y="305" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="10" font-weight="normal" fill="#888" text-anchor="start" style="">관찰용 (미연결)</text>
+<text x="55" y="424" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11.5" font-weight="bold" fill="#1a1a1a" text-anchor="start" style="">범례:</text>
+<polyline points="103,420 151,420" fill="none" stroke="#1a1a1a" stroke-width="1.3" marker-end="url(#arr)"/>
+<text x="159" y="424" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">데이터 신호</text>
+<polyline points="251,420 299,420" fill="none" stroke="#1a1a1a" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arr)"/>
+<text x="307" y="424" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">제어 신호</text>
+<circle cx="393" cy="420" r="3.4" fill="#1a1a1a"/>
+<text x="405" y="424" font-family="arial,'liberation sans',helvetica,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a" text-anchor="start" style="">분기 (junction)</text>
+</svg>

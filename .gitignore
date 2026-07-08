@@ -34,5 +34,20 @@ Thumbs.db
 **/~$*
 
 # 로컬 전용 — GitHub 미포함 (발표자료·논문·학습자료 등 문서 일체 + 로컬 개발 가이드)
-/documents/
+/documents/*
+# README에 삽입한 다이어그램 이미지만 예외적으로 추적
+!/documents/papers/
+/documents/papers/*
+!/documents/papers/diagrams/
+/documents/papers/diagrams/*
+!/documents/papers/diagrams/fig1_pipeline.png
+!/documents/papers/diagrams/fig1_pipeline_en.png
+!/documents/papers/diagrams/fig3_network.png
+!/documents/papers/diagrams/fig3_network_en.png
+!/documents/presentation/
+/documents/presentation/*
+!/documents/presentation/diagrams/
+/documents/presentation/diagrams/*
+!/documents/presentation/diagrams/rtl_mult_spi_top.svg
+!/documents/presentation/diagrams/rtl_mult_spi_top_en.svg
 /CLAUDE.md
