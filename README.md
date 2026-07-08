@@ -54,7 +54,7 @@ Faults in fans and rotating machinery show up first as abnormal sound, but strea
 
 ### 3.2 Hardware Architecture — RTL
 
-![mult_snn_top TDM engine block diagram: control_fsm_mult, weight_bram, param_rom, mac_unit, PLIF-T neuron, per-track membrane/counter](documents/presentation/diagrams/rtl_mult_snn_top_ppt.svg)
+![mult_spi_top board block diagram: clk_div2 → spi_slave → mult_snn_top (time-shared multi-track) → anomaly_flags → LED](documents/presentation/diagrams/rtl_mult_spi_top_en.svg)
 
 **Design Spec** (`hardware/src/`)
 
