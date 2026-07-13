@@ -1,19 +1,16 @@
-// ============================================================
 // control_fsm.v — 3레이어 PLIF-T SNN 시퀀서 FSM
-// ============================================================
+//
 // 동작:
 //   frame_valid=1 → mel 래치 → (버퍼 첫 프레임이면 membrane reset)
 //   → spike_mem clear → L1(128뉴런,40입력) → L2(32뉴런,128입력)
-//   → L3(2뉴런,32입력) → 다음 frame_valid 대기
-//   → 31 타임스텝 반복 후 done=1
+//   → L3(2뉴런,32입력) → 다음 frame_valid 대기 → 31 타임스텝 반복 후 done=1
 //
-// 타이밍 (뉴런당):
-//   fan_cnt=0          : mac_clear=1, BRAM prefetch (addr=base+0)
-//   fan_cnt=1..FAN_IN  : mac_en=1, BRAM data = W[base+fan_cnt-1]
-//   fan_cnt=FAN_IN+1   : mem_wr_en=1 (write-back, plift_core 결과 저장)
+// 뉴런당 타이밍:
+//   fan_cnt=0        : mac_clear=1, BRAM prefetch (addr=base+0)
+//   fan_cnt=1..FAN_IN: mac_en=1, BRAM data = W[base+fan_cnt-1]
+//   fan_cnt=FAN_IN+1 : mem_wr_en=1 (write-back, plift_core 결과 저장)
 //
-// L1_SHIFT=7 (mac_shift_en=1), L2/L3 shift 없음
-// ============================================================
+// L1만 shift(>>>7), L2/L3는 shift 없음.
 
 `timescale 1ns/1ps
 
@@ -47,9 +44,7 @@ module control_fsm #(
     output wire       busy
 );
 
-    // -------------------------------------------------------
     // 레이어별 상수
-    // -------------------------------------------------------
     localparam [7:0] FAN_L1 = 8'd40;
     localparam [7:0] FAN_L2 = 8'd128;
     localparam [7:0] FAN_L3 = 8'd32;
@@ -57,9 +52,7 @@ module control_fsm #(
     localparam [7:0] N_L2   = 8'd32;
     localparam [7:0] N_L3   = 8'd2;
 
-    // -------------------------------------------------------
     // 상태 인코딩
-    // -------------------------------------------------------
     localparam [2:0] S_IDLE     = 3'd0;
     localparam [2:0] S_MEM_RST  = 3'd1; // 1클럭: membrane_mem reset (버퍼 첫 프레임)
     localparam [2:0] S_SPK_CLR  = 3'd2; // 1클럭: spike_mem clear
@@ -69,18 +62,14 @@ module control_fsm #(
     reg [2:0] state;
     reg [4:0] ts_cnt; // 0..30
 
-    // -------------------------------------------------------
     // 레이어별 파라미터 (조합논리)
-    // -------------------------------------------------------
     wire [7:0] fan_max = (layer == 2'd0) ? FAN_L1 :
                          (layer == 2'd1) ? FAN_L2 : FAN_L3;
     wire [7:0] n_max   = (layer == 2'd0) ? N_L1 - 8'd1 :
                          (layer == 2'd1) ? N_L2 - 8'd1 : N_L3 - 8'd1;
     wire       wback   = (fan_cnt == fan_max + 8'd1);
 
-    // -------------------------------------------------------
     // 출력 (조합논리)
-    // -------------------------------------------------------
     assign mac_clear     = (state == S_LAYER) && (fan_cnt == 8'd0);
     assign mac_en        = (state == S_LAYER) && (fan_cnt >= 8'd1) && !wback;
     assign mac_shift_en  = (layer == 2'd0);
@@ -92,9 +81,7 @@ module control_fsm #(
     assign done          = (state == S_BUF_DONE);
     assign busy          = (state != S_IDLE);
 
-    // -------------------------------------------------------
     // 상태 천이 + 카운터
-    // -------------------------------------------------------
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state      <= S_IDLE;

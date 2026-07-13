@@ -1,19 +1,15 @@
-// ============================================================
 // mult_snn_top.v — 다중 트랙 시분할 PLIF-T SNN 최상위 (Phase 6 확장)
-// ============================================================
-// 단일 데이터패스(MAC·가중치 BRAM·param ROM·spike_mem)를 N_TRACKS개
-// 트랙이 시분할 공유. 트랙별 상태(막전위·이상 카운터)만 복제.
 //
-// 인터페이스:
-//   입력: mel_in[40×8b] + frame_valid + track_id
+// 단일 데이터패스(MAC·가중치 BRAM·param ROM·spike_mem)를 N_TRACKS개 트랙이
+// 시분할 공유. 트랙별 상태(막전위·이상 카운터)만 복제.
+//   입력: mel_in[40x8b] + frame_valid + track_id
 //   출력: anomaly_flags[N_TRACKS] (트랙별 이상 플래그), busy
 //
-// 한 frame_valid = 한 트랙의 한 타임스텝.
-// 각 트랙은 독립적으로 31 타임스텝 버퍼를 순환하며, ts0에서 막전위가
-// 0으로 초기화된다(first_ts 마스킹). 결과는 단일채널 snn_top과 bit-exact.
+// 한 frame_valid = 한 트랙의 한 타임스텝. 각 트랙은 독립적으로 31 타임스텝
+// 버퍼를 순환하며, ts0에서 막전위가 0으로 초기화된다(first_ts 마스킹).
+// 결과는 단일채널 snn_top과 bit-exact.
 //
-// ※ snn_top.v / dual_snn_top.v는 동결(수정 금지). 본 모듈은 신규.
-// ============================================================
+// 참고: snn_top.v / dual_snn_top.v는 동결(수정 금지). 본 모듈은 신규.
 
 `timescale 1ns/1ps
 
@@ -37,16 +33,12 @@ module mult_snn_top #(
     output wire                 dbg_ts_done       // 타임스텝 완료(ts_done_r)
 );
 
-    // =========================================================
     // mel 래치 (공유 스크래치, frame_valid 시 등록)
-    // =========================================================
     reg [319:0] mel_reg;
     always @(posedge clk)
         if (frame_valid) mel_reg <= mel_in;
 
-    // =========================================================
     // FSM
-    // =========================================================
     wire [1:0] layer;
     wire [7:0] neuron_cnt, fan_cnt;
     wire mac_clear, mac_en, mac_shift_en;
@@ -65,9 +57,7 @@ module mult_snn_top #(
         .ts_done(ts_done_comb), .buf_done(buf_done), .busy(busy)
     );
 
-    // =========================================================
     // 가중치 BRAM 주소 (공유, 단일채널과 동일)
-    // =========================================================
     wire [13:0] l1_base = {6'b0, neuron_cnt} * 14'd40;
     wire [13:0] l2_base = 14'd5120 + {6'b0, neuron_cnt} * 14'd128;
     wire [13:0] l3_base = 14'd9216 + {6'b0, neuron_cnt} * 14'd32;
@@ -80,9 +70,7 @@ module mult_snn_top #(
                                (layer == 2'd1) ? 8'd128 + neuron_cnt :
                                                  8'd160 + neuron_cnt;
 
-    // =========================================================
     // MAC 입력 a (공유, 단일채널과 동일)
-    // =========================================================
     wire [127:0] l1_spikes;
     wire [31:0]  l2_spikes;
     wire [7:0]  fan_m1    = fan_cnt - 8'd1;
@@ -95,18 +83,14 @@ module mult_snn_top #(
                                (layer == 2'd1) ? (l1_bit ? 8'sd1 : 8'sd0) :
                                                  (l2_bit ? 8'sd1 : 8'sd0);
 
-    // =========================================================
     // 가중치 BRAM / param ROM (공유)
-    // =========================================================
     wire signed [7:0] bram_data;
     weight_bram u_bram (.clk(clk), .addr(bram_addr), .data(bram_data));
 
     wire [7:0] param_beta, param_vth;
     param_rom u_prom (.neuron_idx(neuron_global), .beta(param_beta), .vth(param_vth));
 
-    // =========================================================
     // MAC Unit (공유)
-    // =========================================================
     wire signed [15:0] mac_current;
     mac_unit u_mac (
         .clk(clk), .rst_n(rst_n),
@@ -115,11 +99,9 @@ module mult_snn_top #(
         .current(mac_current)
     );
 
-    // =========================================================
     // 막전위 (트랙별 BRAM, 동기 읽기)
-    // 읽기 주소는 뉴런 처리 내내 안정 → 1클럭 지연이 write-back 전 해소.
+    // 읽기 주소가 뉴런 처리 내내 안정 → 1클럭 지연이 write-back 전 해소.
     // first_ts 시 mem_old=0 (버퍼 시작 초기화 대체).
-    // =========================================================
     wire signed [15:0] mem_rd;
     wire signed [15:0] mem_new_plif;
 
@@ -132,9 +114,7 @@ module mult_snn_top #(
 
     wire signed [15:0] mem_old = first_ts ? 16'sd0 : mem_rd;
 
-    // =========================================================
     // PLIF-T Core (조합, 공유)
-    // =========================================================
     wire plift_spike;
     plift_core u_plif (
         .current(mac_current), .mem_in(mem_old),
@@ -142,9 +122,7 @@ module mult_snn_top #(
         .spike(plift_spike), .mem_out(mem_new_plif)
     );
 
-    // =========================================================
     // Spike Memory (공유 스크래치 — 프레임 내에서만 유효)
-    // =========================================================
     spike_mem u_spk (
         .clk(clk), .rst_n(rst_n), .clear(spike_clear),
         .wr_en(spike_wr_en), .wr_layer(layer[0]),
@@ -152,9 +130,7 @@ module mult_snn_top #(
         .l1_spikes(l1_spikes), .l2_spikes(l2_spikes)
     );
 
-    // =========================================================
     // L3 스파이크 캡처 → anomaly_judge_mult
-    // =========================================================
     reg spk_normal_r, spk_anomaly_r;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

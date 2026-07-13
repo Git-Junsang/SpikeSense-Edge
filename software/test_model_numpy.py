@@ -1,9 +1,7 @@
-"""SNN 모델 동작 검증 — NumPy INT8 시뮬레이터 (v2)
-=================================================
-export_weights.py 로 생성한 INT8 가중치를 로드하여
-RTL 과 동일한 정수 연산으로 40→128→32→2 순전파를 수행합니다.
+"""SNN 동작 검증 — NumPy INT8 시뮬레이터.
 
-PyTorch 불필요. 사전 조건: export_weights.py 실행 완료.
+export_weights.py로 만든 INT8 가중치를 로드해 RTL과 동일한 정수 연산으로
+40->128->32->2 순전파를 수행한다. PyTorch 불필요, export_weights.py 실행이 선행되어야 한다.
 
 사용법:
   python test_model_numpy.py              # 기본 동작 확인
@@ -26,7 +24,7 @@ import os, json, argparse
 WEIGHTS_DIR = "../hardware/src/weights"
 
 
-# ── 파일 로드 ─────────────────────────────────
+# 파일 로드
 
 def _load_hex(path, dtype_uint, dtype_out, shape):
     with open(path) as f:
@@ -48,10 +46,10 @@ def load_vth(path, fmt, shape):
     return load_int8_hex(path, shape)
 
 
-# ── PLIF-T 뉴런 — RTL 정수 연산 ──────────────
+# PLIF-T 뉴런 — RTL 정수 연산
 
 def plif_step(current, membrane, beta_q, vth_q):
-    """한 타임스텝 PLIF-T (RTL 정수 연산과 1:1 대응)"""
+    """한 타임스텝 PLIF-T (RTL 정수 연산과 1:1 대응)."""
     decayed = (beta_q.astype(np.int32) * membrane.astype(np.int32)) >> 8
     mem_new = decayed + current.astype(np.int32)
     spikes  = (mem_new >= vth_q.astype(np.int32)).astype(np.int8)
@@ -59,7 +57,7 @@ def plif_step(current, membrane, beta_q, vth_q):
     return spikes, np.clip(mem_out, -32768, 32767).astype(np.int16)
 
 
-# ── 전체 순전파 ────────────────────────────────
+# 전체 순전파
 
 def snn_forward(mel_int8, W1, W2, W3,
                 beta_L1, beta_L2, beta_L3,
@@ -110,10 +108,10 @@ def classify(mem_L3_r):
     return int(np.argmax(mem_mean)), mem_mean
 
 
-# ── 골든 벡터 저장 ────────────────────────────
+# 골든 벡터 저장
 
 def save_golden(tag, mel, spk_L3, mem_L3, out_dir):
-    """RTL 테스트벤치용 골든 벡터 저장 (.npy + $readmemh hex)"""
+    """RTL 테스트벤치용 골든 벡터 저장 (.npy + $readmemh hex)."""
     os.makedirs(out_dir, exist_ok=True)
     np.save(os.path.join(out_dir, f"{tag}_mel.npy"),     mel)
     np.save(os.path.join(out_dir, f"{tag}_spk_out.npy"), spk_L3)
@@ -126,7 +124,7 @@ def save_golden(tag, mel, spk_L3, mem_L3, out_dir):
     print(f"    저장: {out_dir}/{tag}_*.npy/.hex")
 
 
-# ── 메인 ─────────────────────────────────────
+# 메인
 
 def main():
     ap = argparse.ArgumentParser()
@@ -147,7 +145,7 @@ def main():
         print("      먼저 export_weights.py 를 실행하세요.")
         return
 
-    # ── 가중치 로드 ──────────────────────────
+    # 가중치 로드
     print(f"\n[가중치 로드] {wdir}")
     W1 = load_int8_hex(os.path.join(wdir, "w1.hex"),   (128, 40))
     W2 = load_int8_hex(os.path.join(wdir, "w2.hex"),   (32, 128))
@@ -168,7 +166,7 @@ def main():
     print(f"  Vth({vth_fmt}) L1:[{vth_L1.min()}~{vth_L1.max()}]  "
           f"L2:[{vth_L2.min()}~{vth_L2.max()}]  L3:[{vth_L3.min()}~{vth_L3.max()}]")
 
-    # ── 테스트 입력 생성 ─────────────────────
+    # 테스트 입력 생성
     np.random.seed(42)
     T = 31  # 31 타임스텝 (31 × 32ms = 992ms)
 
@@ -181,7 +179,7 @@ def main():
         np.random.beta(5, 2, (T, 40)) * 127, 0, 127
     ).astype(np.int8)
 
-    # ── 순전파 실행 ──────────────────────────
+    # 순전파 실행
     for tag, mel_int8 in [("normal", mel_normal), ("anomaly", mel_anomaly)]:
         label = "정상" if tag == "normal" else "이상"
         print(f"\n── {label} 입력  (T={T}, l1_shift={args.l1_shift}) ──")

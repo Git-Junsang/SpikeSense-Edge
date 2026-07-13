@@ -1,21 +1,20 @@
 """demo.py — SpikeSense-Edge 실보드 데모 (Enter 스텝, 2트랙, OLED + LED)
-=========================================================================
-시나리오 (사용자 지정):
-    Enter를 누를 때마다 한 스텝씩 진행. 각 스텝은 두 트랙에 한 세그먼트씩 전송.
-        track0:  이상  정상  정상  이상
-        track1:  정상  이상  정상  이상
+
+Enter를 누를 때마다 한 스텝씩 진행하며, 각 스텝은 두 트랙에 한 세그먼트씩 전송한다.
+    track0:  이상  정상  정상  이상
+    track1:  정상  이상  정상  이상
 
 각 스텝마다:
   1) RPi가 트랙0·트랙1의 Mel 세그먼트(31타임스텝)를 SPI로 FPGA에 전송
-  2) RPi numpy 추론으로 "현재 음 정상/이상"을 판정 → OLED(1.3" I2C)에 표시
+  2) RPi numpy 추론으로 현재 음이 정상/이상인지 판정 → OLED(1.3" I2C)에 표시
   3) FPGA는 세그먼트 단위 판정으로 LED0(=트랙0)·LED1(=트랙1)을 토글
 
-데모 음원은 RTL과 bit-exact 검증된 골든 hw 벡터를 기본 사용 → 마이크 없이 100% 재현.
+데모 음원은 RTL과 bit-exact 검증된 골든 hw 벡터를 기본으로 써서 마이크 없이 재현된다.
     hw_normal_mel.npy  → 정상 (스파이크 정상29:이상2)
     hw_anomaly_mel.npy → 이상 (스파이크 정상0:이상31)
 실제 WAV로 바꾸려면 --normal-wav / --anomaly-wav 지정(각 파일의 첫 세그먼트 사용).
 
-⚠️ FPGA LED가 매 세그먼트 토글되려면 **demo_spi_top** 비트스트림이어야 한다.
+주의: FPGA LED가 매 세그먼트 토글되려면 demo_spi_top 비트스트림이어야 한다.
    (기존 mult_spi_top은 전역 Leaky Counter라 래치되어 토글 안 됨 — OLED는 정상.)
 
 예)

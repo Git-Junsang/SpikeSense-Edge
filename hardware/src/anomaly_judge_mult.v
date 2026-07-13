@@ -1,15 +1,11 @@
-// ============================================================
 // anomaly_judge_mult.v — 다중 트랙 Leaky Counter 이상 판정 (시분할용)
-// ============================================================
-// 단일채널 anomaly_judge.v의 다중 트랙 확장판.
-// 트랙별 (cnt_normal, cnt_anomaly) 카운터를 유지.
+//
+// 단일채널 anomaly_judge.v의 다중 트랙 확장판. 트랙별 (cnt_normal, cnt_anomaly) 유지.
 //   감쇠: cnt = cnt - (cnt >> SHIFT_N) + spike   (곱셈 불필요)
 //   update=1(ts_done_r) 시 track 카운터를 read-modify-write.
-// 카운터는 전역 리셋에서만 0으로 초기화되며 버퍼 경계와 무관하게
-// 연속 누적된다(원본과 동일한 연속 leaky 적분 동작).
-//
+// 카운터는 전역 리셋에서만 0으로 초기화되고 버퍼 경계와 무관하게 연속
+// 누적된다(원본과 동일한 leaky 적분 동작).
 // anomaly_flags[t] = (cnt_anomaly[t] > cnt_normal[t])  (조합)
-// ============================================================
 
 `timescale 1ns/1ps
 

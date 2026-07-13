@@ -1,9 +1,9 @@
-"""compare_quant.py — float32(PyTorch) vs INT8(양자화) 정확도 비교 (일회성 분석)
-==================================================================================
-같은 데이터셋(data_mimii)으로 두 모델을 돌려 양자화 오차에 의한 정확도 변화를 측정.
+"""float32(PyTorch) vs INT8(양자화) 정확도 비교.
 
-  ① float : best_model_mimii_v2-1.pth (PyTorch, float32 가중치, mel_float[0,1] 입력)
-  ② int8  : rpi/snn_infer (INT8 가중치, mel_int8=round(mel*127) 입력, 정수 연산=RTL)
+같은 데이터셋(data_mimii)으로 두 모델을 돌려 양자화 오차에 따른 정확도 변화를 측정한다.
+
+  float : best_model_mimii_v2-1.pth (PyTorch, float32 가중치, mel_float[0,1] 입력)
+  int8  : rpi/snn_infer (INT8 가중치, mel_int8=round(mel*127) 입력, 정수 연산=RTL)
 
 분류 기준은 둘 다 동일: 막전위 평균(mem_mean)의 argmax → 0=정상, 1=이상.
 정답: data_mimii/normal=0, data_mimii/abnormal=1.

@@ -1,5 +1,5 @@
 """snn_infer.py — NumPy INT8 SNN 추론 (--dry-run 전용, Phase 7)
-================================================================
+
 FPGA 없이 RPi에서 PLIF-T 순전파(40→128→32→2)를 RTL과 동일한 정수 연산으로 수행한다.
 software/test_model_numpy.py 의 검증된 로직과 1:1 동일하되, rpi/ 단독 실행이 가능하도록
 hex 가중치만 의존한다 (PyTorch 불필요).
@@ -17,7 +17,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_WEIGHTS = os.path.normpath(os.path.join(_HERE, "..", "hardware", "src", "weights"))
 
 
-# ── hex 로더 ─────────────────────────────────────────────────
+# hex 로더
 
 def _load_hex(path, dtype_uint, dtype_out, shape):
     with open(path) as f:
@@ -25,7 +25,7 @@ def _load_hex(path, dtype_uint, dtype_out, shape):
     return np.array(vals, dtype=dtype_uint).astype(dtype_out).reshape(shape)
 
 
-# ── PLIF-T 한 스텝 (RTL 정수 연산과 1:1) ─────────────────────
+# PLIF-T 한 스텝 (RTL 정수 연산과 1:1)
 
 def _plif_step(current, membrane, beta_q, vth_q):
     decayed = (beta_q.astype(np.int32) * membrane.astype(np.int32)) >> 8

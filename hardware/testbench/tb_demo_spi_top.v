@@ -1,10 +1,8 @@
-// ============================================================
-// tb_demo_spi_top.v — 데모 시퀀스 LED 토글 검증 (신규)
-// ============================================================
-// demo_spi_top(세그먼트 단위 판정)이 사용자가 지정한 데모 시퀀스에서
-// LED를 매 세그먼트마다 정확히 토글하는지 검증한다.
+// tb_demo_spi_top.v — 데모 시퀀스 LED 토글 검증
+// demo_spi_top(세그먼트 단위 판정)이 지정된 데모 시퀀스에서 LED를
+// 매 세그먼트마다 정확히 토글하는지 검증한다.
 //
-//   사용자 시퀀스 (Enter 4회, 각 step 두 트랙에 한 세그먼트씩 전송):
+//   시퀀스 (Enter 4회, 각 step 두 트랙에 한 세그먼트씩 전송):
 //     track0:  이상  정상  정상  이상
 //     track1:  정상  이상  정상  정상
 //   기대 LED:
@@ -19,7 +17,6 @@
 //   /usr/bin/iverilog -g2001 -o hardware/sim/demo_spi_top \
 //       hardware/testbench/tb_demo_spi_top.v hardware/src/*.v
 //   /usr/bin/vvp hardware/sim/demo_spi_top
-// ============================================================
 
 `timescale 1ns/1ps
 
@@ -52,7 +49,7 @@ reg [7:0] hw_a_mel [0:1239];
 integer k, b, timeout, ts;
 reg [327:0] fr;
 
-// ─── SPI 마스터: 한 타임스텝(41B) 전송 (mode 0, MSB-first) ───
+// SPI 마스터: 한 타임스텝(41B) 전송 (mode 0, MSB-first)
 task spi_send;
     input [7:0]   ch;
     input integer tstep;
@@ -72,7 +69,7 @@ task spi_send;
     end
 endtask
 
-// ─── 한 타임스텝 처리 완료 대기 (busy assert→deassert) ──────
+// 한 타임스텝 처리 완료 대기 (busy assert→deassert)
 task wait_proc;
     begin
         timeout = 0;
@@ -84,7 +81,7 @@ task wait_proc;
     end
 endtask
 
-// ─── 한 세그먼트(31 타임스텝) 전송 ──────────────────────────
+// 한 세그먼트(31 타임스텝) 전송
 task send_segment;
     input [7:0] ch;
     input       is_anom;
@@ -96,7 +93,7 @@ task send_segment;
     end
 endtask
 
-// ─── LED 체크 ────────────────────────────────────────────────
+// LED 체크
 task check_led;
     input integer step;
     input         exp0;

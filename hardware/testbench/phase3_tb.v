@@ -1,13 +1,10 @@
-// ============================================================
-// phase3_tb.v — Phase 3 제어·통합 모듈 검증 테스트벤치
-// ============================================================
+// phase3_tb.v — Phase 3 제어·통합 모듈 검증
 // 대상: control_fsm, snn_top (anomaly_judge는 src_old 복사본)
 //
 // 실행:
 //   /usr/bin/iverilog -g2001 -o hardware/sim/phase3 \
 //       hardware/testbench/phase3_tb.v hardware/src/*.v
 //   /usr/bin/vvp hardware/sim/phase3
-// ============================================================
 
 `timescale 1ns/1ps
 
@@ -31,7 +28,7 @@
 
 module tb_phase3;
 
-// ─── 공통 클럭 / 리셋 ───────────────────────────────────────
+// 공통 클럭 / 리셋
 reg clk   = 0;
 reg rst_n = 0;
 always #5 clk = ~clk;  // 100 MHz
@@ -40,7 +37,7 @@ integer pass_n = 0;
 integer fail_n = 0;
 integer i;
 
-// ─── control_fsm 포트 ───────────────────────────────────────
+// control_fsm 포트
 reg  fsm_frame_valid = 0;
 wire [1:0]  fsm_layer;
 wire [7:0]  fsm_neuron_cnt;
@@ -75,7 +72,7 @@ control_fsm #(.TS_TOTAL(2)) dut_fsm (  // 검증 속도용: 2 타임스텝
     .busy         (fsm_busy)
 );
 
-// ─── snn_top 포트 ───────────────────────────────────────────
+// snn_top 포트
 reg  [319:0] top_mel_in  = 320'b0;
 reg          top_fv      = 0;
 wire         top_anomaly;
@@ -90,7 +87,7 @@ snn_top dut_top (
     .busy         (top_busy)
 );
 
-// ─── 보조: 클럭 대기 태스크 ─────────────────────────────────
+// 보조: 클럭 대기 태스크
 task clk_n;
     input integer n;
     integer k;
@@ -101,21 +98,17 @@ task clk_n;
     end
 endtask
 
-// ─── VCD 덤프 ────────────────────────────────────────────────
+// VCD 덤프
 initial begin
     $dumpfile("hardware/sim/phase3.vcd");
     $dumpvars(0, tb_phase3);
 end
 
-// ============================================================
 // 메인 테스트
-// ============================================================
 initial begin
     #12 rst_n = 1;
 
-    // ===========================================================
     // [1] control_fsm — IDLE 초기 상태
-    // ===========================================================
     $display("\n[1] control_fsm — IDLE 초기 상태");
     #2;
     `CHECK(fsm_busy,          1'b0, "1-1  reset 후 busy=0")
@@ -126,9 +119,7 @@ initial begin
     `CHECK(fsm_mem_rst_pulse, 1'b0, "1-6  IDLE: mem_rst_pulse=0")
     `CHECK(fsm_done,          1'b0, "1-7  IDLE: done=0")
 
-    // ===========================================================
     // [2] control_fsm — 첫 frame_valid: MEM_RST → SPK_CLR → LAYER
-    // ===========================================================
     $display("\n[2] control_fsm — 첫 frame_valid 후 MEM_RST/SPK_CLR 시퀀스");
 
     // ts_cnt=0이므로 첫 frame_valid → S_MEM_RST
@@ -136,7 +127,7 @@ initial begin
     @(posedge clk); #1;
     fsm_frame_valid = 0;
 
-    // 이제 S_MEM_RST
+    // S_MEM_RST
     `CHECK(fsm_mem_rst_pulse, 1'b1, "2-1  MEM_RST: mem_rst_pulse=1")
     `CHECK(fsm_spike_clear,   1'b0, "2-2  MEM_RST: spike_clear=0")
     `CHECK(fsm_busy,          1'b1, "2-3  MEM_RST: busy=1")
@@ -156,9 +147,7 @@ initial begin
     `CHECK(fsm_mac_shift_en,1'b1, "2-11 L1: mac_shift_en=1")
     `CHECK(fsm_spike_clear,1'b0,  "2-12 LAYER: spike_clear=0")
 
-    // ===========================================================
     // [3] control_fsm — fan_cnt 증가 및 MAC en 확인
-    // ===========================================================
     $display("\n[3] control_fsm — fan_cnt 진행 (L1, 40입력)");
 
     @(posedge clk); #1;
@@ -187,15 +176,11 @@ initial begin
     `CHECK(fsm_fan_cnt,    8'd0,  "3-13 fan_cnt 리셋=0")
     `CHECK(fsm_mac_clear,  1'b1,  "3-14 fan_cnt=0: mac_clear=1")
 
-    // ===========================================================
     // [4] control_fsm — 레이어 전환 (L1→L2→L3)
-    // ===========================================================
     $display("\n[4] control_fsm — 레이어 전환");
 
-    // L1 뉴런 1~127 통과 → L2 neuron_cnt=0, fan_cnt=0
-    // 뉴런 1 fan_cnt=0에서 시작, 뉴런 1개당 42cy (0→41→next_neuron0)
-    // 127뉴런 × 42cy = 5334cy → L2 시작
-    clk_n(42 * 127); // 127뉴런 × 42cy = 5334
+    // 뉴런당 42cy(0→41→next). L1 127뉴런 × 42cy = 5334cy → L2 시작
+    clk_n(42 * 127);
     // 이제 L1 뉴런 127 write-back 직후: layer→1(L2), neuron_cnt=0, fan_cnt=0
     `CHECK(fsm_layer,      2'd1, "4-1  L2 전환: layer=1")
     `CHECK(fsm_neuron_cnt, 8'd0, "4-2  L2: neuron_cnt=0")
@@ -226,9 +211,7 @@ initial begin
     `CHECK(fsm_done,   1'b0, "4-14 1st 타임스텝: done=0 (아직 2nd 남음)")
     `CHECK(fsm_ts_done,1'b0, "4-15 ts_done 1클럭만 유지")
 
-    // ===========================================================
-    // [5] control_fsm — 2nd 타임스텝: SPK_CLR(no MEM_RST), done=1
-    // ===========================================================
+    // [5] control_fsm — 2nd 타임스텝: SPK_CLR(MEM_RST 없음), done=1
     $display("\n[5] control_fsm — 2nd 타임스텝 (ts_cnt=1, MEM_RST 없음)");
 
     fsm_frame_valid = 1;
@@ -250,9 +233,7 @@ initial begin
     `CHECK(fsm_done,  1'b0, "5-5  done은 1클럭만 유지")
     `CHECK(fsm_busy,  1'b0, "5-6  done 후 IDLE: busy=0")
 
-    // ===========================================================
     // [6] snn_top — 구문·연결 검증
-    // ===========================================================
     $display("\n[6] snn_top — reset 후 초기 상태");
     #2;
     `CHECK(top_busy,    1'b0, "6-1  reset 후 busy=0")

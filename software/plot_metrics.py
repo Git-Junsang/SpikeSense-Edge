@@ -1,7 +1,6 @@
-"""
-SNN 평가 그래프 (2단계: CSV → 곡선)
-====================================
-1단계 산출물을 입력으로 받아 그래프를 그린다.
+"""SNN 평가 그래프 (2단계: CSV -> 곡선).
+
+1단계 산출물(CSV)을 받아 그래프를 그린다.
 
   (A) 학습 곡선  : train.py 가 남긴 <model>_history.csv
         epoch, lr, train_loss, train_acc, test_loss, test_acc, test_f1
@@ -48,9 +47,7 @@ def read_csv(path):
     return out
 
 
-# ============================================================
 # (A) 학습 곡선
-# ============================================================
 
 def plot_learning_curves(history_csv, outdir):
     d = read_csv(history_csv)
@@ -80,9 +77,7 @@ def plot_learning_curves(history_csv, outdir):
     print(f"  💾 {path}  (best test F1 {d['test_f1'][best_i]:.4f} @ epoch {int(ep[best_i])})")
 
 
-# ============================================================
 # (B) 판정 곡선 (ROC / F1-threshold / PR)
-# ============================================================
 
 def plot_decision_curves(eval_csv, outdir):
     d = read_csv(eval_csv)
@@ -93,17 +88,17 @@ def plot_decision_curves(eval_csv, outdir):
         print("  ⚠️  단일 클래스라 ROC/PR 생략")
         return
 
-    # --- ROC ---
+    # ROC
     fpr, tpr, _ = roc_curve(y, score)
     roc_auc = auc(fpr, tpr)
 
-    # --- F1 vs threshold (임계값 스윕) ---
+    # F1 vs threshold (임계값 스윕)
     ths = np.linspace(0.0, 1.0, 101)
     f1s = [f1_score(y, (score >= t).astype(int), zero_division=0)*1.04 for t in ths]
     f1s = np.array(f1s)
     best_t_i = int(np.argmax(f1s))
 
-    # --- PR ---
+    # PR
     prec, rec, _ = precision_recall_curve(y, score)
     pr_auc = auc(rec, prec)
 

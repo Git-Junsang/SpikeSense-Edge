@@ -1,10 +1,10 @@
-"""make_hw_test_vectors.py — Phase 8 하드웨어 통합 테스트용 Mel 벡터 생성
-=========================================================================
-HW의 이상 판정(anomaly_judge_mult)은 **L3 스파이크 Leaky Counter**(cnt_a > cnt_n)로
-LED를 켠다. 이는 SW 분류(막전위 평균 argmax)와 규칙이 다르며, 합성 골든 벡터는
-anomaly 스파이크가 normal보다 적어 **LED를 켜지 못한다**.
+"""하드웨어 통합 테스트용 Mel 벡터 생성.
 
-따라서 RPi→FPGA SPI 링크를 LED로 검증하려면 cnt_a > cnt_n 를 확실히 만드는
+HW의 이상 판정(anomaly_judge_mult)은 L3 스파이크 Leaky Counter(cnt_a > cnt_n)로
+LED를 켠다. 이는 SW 분류(막전위 평균 argmax)와 규칙이 달라서, 합성 골든 벡터는
+anomaly 스파이크가 normal보다 적어 LED를 켜지 못한다.
+
+따라서 RPi->FPGA SPI 링크를 LED로 검증하려면 cnt_a > cnt_n 를 확실히 만드는
 입력이 필요하다. 이 스크립트는 MIMII에서:
   - 이상: (cnt_a - cnt_n) 최대 세그먼트  → LED ON 보장
   - 정상: (cnt_a - cnt_n) 최소 세그먼트  → LED OFF 보장

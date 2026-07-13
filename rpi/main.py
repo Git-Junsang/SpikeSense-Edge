@@ -1,5 +1,5 @@
 """main.py — SpikeSense-Edge RPi5 실시간 파이프라인 (Phase 7)
-=============================================================
+
 USB 마이크 N개 → Mel INT8 → (FPGA SPI 전송 | numpy 추론) 다중 트랙 루프.
 
 모드:
@@ -38,7 +38,7 @@ def _fmt(track_id, label, mem_mean=None, extra=""):
     return f"  track {track_id:2d}: {tag}{mm}{extra}"
 
 
-# ── dry-run: numpy 전용 ───────────────────────────────────────
+# dry-run: numpy 전용
 
 def run_dry(args):
     infer = SnnInfer(args.weights_dir)
@@ -72,7 +72,7 @@ def run_dry(args):
         print(_fmt(tid, label, mem, extra=f"  [golden {tag}]"))
 
 
-# ── FPGA 모드 / 마이크 스트리밍 ───────────────────────────────
+# FPGA 모드 / 마이크 스트리밍
 
 def run_meter(args):
     """RMS/dBFS 라이브 미터 — 컷라인(--silence-rms) 보정용. 추론·SPI 없음."""
@@ -115,10 +115,10 @@ def _stream_loop(args, infer, spi):
     mics = _make_capture(args)
     n = len(mics.devices)
     print(f"  {n} track(s)  Ctrl-C to stop")
-    # 에너지 게이트: 원시 RMS < silence_rms 면 '무음' → 아무것도 전송하지 않음(skip).
-    # 정적 노이즈를 보내지 않으니 도메인 밖 오탐도 없고, FPGA 카운터도 건드리지 않는다.
-    # (normal 벡터를 보내면 cnt_n이 누적돼 이후 이상이 cnt_a>cnt_n을 못 넘는 부작용 → 전송 안 함)
-    # 시끄러운 산업 현장에선 RMS가 항상 높아 게이트가 동작하지 않음(무해).
+    # 에너지 게이트: 원시 RMS < silence_rms 면 무음으로 보고 전송 자체를 생략한다.
+    # 정적 노이즈를 보내지 않으니 오탐이 줄고 FPGA 카운터도 건드리지 않는다.
+    # (normal 벡터를 계속 보내면 cnt_n이 쌓여 이후 이상이 cnt_a>cnt_n을 못 넘는다.)
+    # 시끄러운 산업 현장에선 RMS가 항상 높아 게이트가 사실상 열려 있다.
     gate = not args.no_gate
     # FPGA anomaly_judge_mult와 동일한 섀도우 카운터 (--monitor 시 LED 예측 표시)
     shadow = {tid: LeakyJudge() for tid in range(n)}
@@ -171,7 +171,7 @@ def run_fpga(args):
         _stream_loop(args, infer=infer, spi=spi)
 
 
-# ── CLI ──────────────────────────────────────────────────────
+# CLI
 
 def main():
     ap = argparse.ArgumentParser(description="SpikeSense-Edge RPi5 파이프라인")

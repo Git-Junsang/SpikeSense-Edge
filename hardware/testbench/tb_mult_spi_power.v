@@ -1,17 +1,15 @@
-// ============================================================
 // tb_mult_spi_power.v — 전력 측정(SAIF)용 자극 전용 테스트벤치
-// ============================================================
 // 목적: Post-Implementation Timing Simulation으로 스위칭 액티비티(SAIF)를
-//   뽑아 report_power의 신뢰도를 올린다.
+//   뽑아 report_power 신뢰도를 올린다.
 //
-// tb_mult_spi_top과 달리 **내부 신호(busy, u_mem.mem 등)를 일절 참조하지 않는다**.
-//   → 플랫된 타이밍 네트리스트에서도 elaborate 성공.
-//   → 골든 hex $readmemh도 없음 (mel은 의사난수 생성) → 시뮬 working-dir 무관.
+// tb_mult_spi_top과 달리 내부 신호(busy, u_mem.mem 등)를 일절 참조하지 않는다.
+//   플랫된 타이밍 네트리스트에서도 elaborate 성공.
+//   골든 hex $readmemh도 없음 (mel은 의사난수 생성) → 시뮬 working-dir 무관.
 //
 // SPI 마스터(mode 0, SCK 5MHz)로 여러 트랙·타임스텝에 41B 프레임을 인가하여
 // 시분할 데이터패스를 충분히 토글시킨 뒤 $finish.
 //
-// 사용 (Vivado):
+// Vivado 사용 순서:
 //   1) 이 파일을 Simulation Sources(sim_1)에 추가, sim top = tb_mult_spi_power
 //   2) Run Post-Implementation Timing Simulation
 //   3) Tcl: open_saif power.saif; log_saif [get_objects -r /tb_mult_spi_power/dut/*];
@@ -19,11 +17,10 @@
 //   4) open_run impl_1; read_saif -strip_path tb_mult_spi_power/dut power.saif;
 //      report_power -file power_saif.rpt
 //
-// iverilog 동작 확인(behavioral, 저장소 루트에서):
+// iverilog 동작 확인 (behavioral, 저장소 루트에서):
 //   /usr/bin/iverilog -g2001 -o hardware/sim/mult_spi_power \
 //       hardware/testbench/tb_mult_spi_power.v hardware/src/*.v
 //   /usr/bin/vvp hardware/sim/mult_spi_power
-// ============================================================
 
 `timescale 1ns/1ps
 

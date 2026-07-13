@@ -1,8 +1,6 @@
-"""
-SNN 기반 1D 음향 이상 감지 모델 (v12 - PLIF-T 적용)
-=====================================
-변경 사항:
-  - beta(감소율) 뿐만 아니라 threshold(발화 임계값)도 학습 파라미터로 설정
+"""SNN 기반 음향 이상 감지 모델 (PLIF-T).
+
+beta(감쇠율)와 threshold(발화 임계값)를 모두 학습 파라미터로 둔다.
 """
 
 import torch
@@ -25,9 +23,7 @@ class FastSigmoidSurrogate(torch.autograd.Function):
 def spike_fn(membrane, threshold):
     return FastSigmoidSurrogate.apply(membrane, threshold)
 
-# ============================================================
-# ★ PLIF-T (Parametric LIF with Learnable Threshold) 뉴런
-# ============================================================
+# PLIF-T (Parametric LIF with Learnable Threshold) 뉴런
 
 class PLIFLayer(nn.Module):
     def __init__(self, n_neurons, init_beta=0.8, init_threshold=1.0):
@@ -43,19 +39,19 @@ class PLIFLayer(nn.Module):
         else:
             self.w_beta = nn.Parameter(torch.full((n_neurons,), init_w_beta, dtype=torch.float32))
 
-        # ★ 학습 가능한 임계값 (Threshold) 추가
+        # 학습 가능한 임계값
         self.w_thr = nn.Parameter(torch.full((n_neurons,), init_threshold, dtype=torch.float32))
 
     def forward(self, input_current, membrane):
         beta = torch.sigmoid(self.w_beta).to(input_current.device)
         
-        # 임계값이 0 이하로 떨어지는 것을 방지 (최소 0.1 보장)
+        # 임계값이 0 이하로 내려가지 않도록 최소 0.1로 클램프
         thr = torch.clamp(self.w_thr, min=0.1).to(input_current.device)
-        
+
         membrane = beta * membrane + input_current
         spikes = spike_fn(membrane, thr)
-        
-        # Soft Reset 모델 (스파이크 방출 시 막전위 차감)
+
+        # Soft reset: 발화 시 임계값만큼 막전위 차감
         membrane = membrane - spikes * thr
         
         return spikes, membrane
@@ -63,9 +59,7 @@ class PLIFLayer(nn.Module):
     def init_membrane(self, batch_size, device='cpu'):
         return torch.zeros(batch_size, self.n_neurons, device=device)
 
-# ============================================================
 # SNN 모델 구조
-# ============================================================
 
 class AnomalySNN(nn.Module):
     def __init__(self, n_input=40):

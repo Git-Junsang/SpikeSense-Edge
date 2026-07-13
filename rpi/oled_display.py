@@ -1,6 +1,6 @@
 """oled_display.py — 1.3" I2C OLED(SH1106) 상태 표시 (데모용)
-=============================================================
-demo.py에서 "현재 음이 정상/비정상인지"를 OLED에 띄운다.
+
+demo.py에서 현재 음이 정상/비정상인지를 OLED에 띄운다.
 
 하드웨어: 1.30인치 I2C OLED는 보통 **SH1106**(128×64) 컨트롤러다.
           (0.96인치는 SSD1306 — --oled-controller ssd1306 로 전환)
@@ -60,7 +60,7 @@ class OledDisplay:
             self.dev = None
             print(f"  [OLED] 초기화 실패 → 콘솔만 사용 ({type(e).__name__}: {e})")
 
-    # ── 내부: 트랙 한 행(정상/이상) 그리기 ───────────────────
+    # 내부: 트랙 한 행(정상/이상) 그리기
     def _row(self, draw, y, text, highlight):
         # 이상(highlight)이면 흰 박스 반전 → 멀리서도 한눈에
         if highlight:
@@ -69,7 +69,7 @@ class OledDisplay:
         else:
             draw.text((4, y + 1), text, font=self.font_m, fill="white")
 
-    # ── 두 트랙 상태 화면 ────────────────────────────────────
+    # 두 트랙 상태 화면
     def show_status(self, step, total, l0, l1):
         if self.dev is None:
             return
@@ -79,7 +79,7 @@ class OledDisplay:
             self._row(draw, 16, f"T0 {self.LABELS[l0]}", l0 == 1)
             self._row(draw, 40, f"T1 {self.LABELS[l1]}", l1 == 1)
 
-    # ── 전송 중 화면 ─────────────────────────────────────────
+    # 전송 중 화면
     def show_sending(self, step, total, track_id):
         if self.dev is None:
             return
@@ -89,7 +89,7 @@ class OledDisplay:
             draw.text((4, 24), f"sending T{track_id} ...",
                       font=self.font_m, fill="white")
 
-    # ── 자유 텍스트 여러 줄 ──────────────────────────────────
+    # 자유 텍스트 여러 줄
     def show_lines(self, lines):
         if self.dev is None:
             return

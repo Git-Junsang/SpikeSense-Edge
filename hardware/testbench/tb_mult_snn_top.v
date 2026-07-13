@@ -1,18 +1,14 @@
-// ============================================================
 // tb_mult_snn_top.v — 다중 트랙 시분할 SNN 검증 (Phase 6 확장)
-// ============================================================
 // 검증 전략 (시분할 격리성 + bit-exact 정확도):
-//   4개 트랙에 골든 패턴을 배정: track0=normal, track1=anomaly,
-//   track2=normal, track3=anomaly.
+//   4개 트랙에 골든 패턴 배정 (t0=normal, t1=anomaly, t2=normal, t3=anomaly).
 //   타임스텝마다 4트랙 프레임을 인터리빙 전송하고, 각 트랙의 L3 막전위·
-//   스파이크가 해당 패턴의 단일채널 골든과 bit-exact 일치하는지 확인.
-//   → 트랙 간 상태 격리 + 단일채널 등가성 동시 증명.
+//   스파이크가 해당 패턴의 단일채널 골든과 bit-exact 일치하는지 확인한다.
+//   트랙 간 상태 격리와 단일채널 등가성을 동시에 증명.
 //
 // 실행:
 //   /usr/bin/iverilog -g2001 -o hardware/sim/mult_snn_top \
 //       hardware/testbench/tb_mult_snn_top.v hardware/src/*.v
 //   /usr/bin/vvp hardware/sim/mult_snn_top
-// ============================================================
 
 `timescale 1ns/1ps
 
@@ -21,7 +17,7 @@ module tb_mult_snn_top;
 localparam N_TRACKS = 4;
 localparam TRK_W    = 2;
 
-// ─── 클럭 / 리셋 (50 MHz, 주기 20ns) ────────────────────────
+// 클럭 / 리셋 (50 MHz, 주기 20ns)
 reg clk = 0;
 reg rst_n = 0;
 always #10 clk = ~clk;
@@ -30,7 +26,7 @@ integer pass_n = 0;
 integer fail_n = 0;
 integer ts_i, t_i;
 
-// ─── DUT ─────────────────────────────────────────────────────
+// DUT
 reg  [319:0] mel_in = 320'b0;
 reg          frame_valid = 0;
 reg  [TRK_W-1:0] track_id = 0;
@@ -43,7 +39,7 @@ mult_snn_top #(.N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) dut (
     .anomaly_flags(anomaly_flags), .busy(busy)
 );
 
-// ─── 골든 데이터 ─────────────────────────────────────────────
+// 골든 데이터
 reg [7:0]  gv_n_mel [0:1239];
 reg [7:0]  gv_a_mel [0:1239];
 reg [15:0] gv_n_mem [0:61];
@@ -58,7 +54,7 @@ integer timeout_cnt;
 integer c;
 reg [7:0] mel_byte;
 
-// ─── mel 패킹 ─────────────────────────────────────────────────
+// mel 패킹
 task pack_mel;
     input integer ts_idx;
     input         is_anomaly;
@@ -70,7 +66,7 @@ task pack_mel;
     end
 endtask
 
-// ─── 프레임 전송 + 처리완료 + ts_done_r 대기 ─────────────────
+// 프레임 전송 + 처리완료 + ts_done_r 대기
 task send_and_wait;
     input integer trk;
     begin
@@ -92,7 +88,7 @@ task send_and_wait;
     end
 endtask
 
-// ─── 트랙 결과 검증 (해당 트랙 L3 막전위·스파이크 vs 골든) ────
+// 트랙 결과 검증 (해당 트랙 L3 막전위·스파이크 vs 골든)
 task check_track;
     input integer trk;
     input         is_anomaly;
@@ -141,7 +137,7 @@ task check_track;
     end
 endtask
 
-// ─── 메인 ────────────────────────────────────────────────────
+// 메인
 initial begin
     $readmemh("hardware/src/weights/golden/normal_mel.hex",      gv_n_mel);
     $readmemh("hardware/src/weights/golden/anomaly_mel.hex",     gv_a_mel);

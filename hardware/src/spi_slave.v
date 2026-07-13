@@ -1,18 +1,14 @@
-// ============================================================
 // spi_slave.v — SPI 수신 전용 슬레이브 (RPi5 → FPGA)
-// ============================================================
+//
 // 프로토콜 (RPi5 spidev, mode 0):
-//   CPOL=0, CPHA=0  → SCK idle=0, MOSI를 SCK 상승엣지에서 샘플
-//   MSB first, 41바이트 패킷
-//     Byte 0      : channel_id (0x00=ch0, 0x01=ch1)
-//     Byte 1..40  : mel_int8[0..39]
+//   CPOL=0, CPHA=0 → SCK idle=0, MOSI를 SCK 상승엣지에서 샘플. MSB first, 41바이트 패킷
+//     Byte 0     : channel_id (0x00=ch0, 0x01=ch1)
+//     Byte 1..40 : mel_int8[0..39]
 //   CS(active-low) 하강 → 41B 전송 → CS 상승 → frame_rdy 1클럭 펄스
 //
-// CDC: sck/mosi/cs_n을 시스템 클럭(clk, 100MHz)으로 2단 동기화 후
-//      SCK 상승엣지를 검출해 비트 시프트 (SCK 10MHz ≪ clk이므로 안전).
-//
-// mel_out 패킹: mel_out[c*8 +: 8] = mel_int8[c]  (ch0 → [7:0], snn_top과 동일)
-// ============================================================
+// CDC: sck/mosi/cs_n을 clk(100MHz)로 2단 동기화 후 SCK 상승엣지를 검출해
+//      비트 시프트 (SCK 10MHz << clk이므로 안전).
+// mel_out 패킹: mel_out[c*8 +: 8] = mel_int8[c] (ch0 → [7:0], snn_top과 동일)
 
 `timescale 1ns/1ps
 
@@ -33,9 +29,7 @@ module spi_slave (
 
     localparam [8:0] PKT_BITS = 9'd328; // 41바이트 × 8
 
-    // -------------------------------------------------------
     // 입력 동기화 (2단 FF, 메타스테이빌리티 방지)
-    // -------------------------------------------------------
     reg [1:0] sck_sync, cs_sync;
     reg [1:0] mosi_sync;
     always @(posedge clk or negedge rst_n) begin
@@ -56,9 +50,7 @@ module spi_slave (
     wire cs_active = ~cs_sync[1];          // CS=0 동안 수신
     wire mosi_bit  = mosi_sync[1];
 
-    // -------------------------------------------------------
     // 시프트 수신 + 바이트 조립
-    // -------------------------------------------------------
     reg  [8:0]   bit_cnt;       // 0..328 (수신한 총 비트 수)
     reg  [327:0] shreg;         // MSB-first 누적 시프트 레지스터
 

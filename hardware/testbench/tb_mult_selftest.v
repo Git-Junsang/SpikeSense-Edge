@@ -1,6 +1,4 @@
-// ============================================================
 // tb_mult_selftest.v — 보드 자가진단(mult_selftest_top) 시뮬 검증
-// ============================================================
 // 보드에 굽기 전, 자가진단 로직이 골든 입력에 대해 PASS(LED15)를
 // 내는지 iverilog로 확인한다. led[13]=done 대기 후 led[15]=PASS 검사.
 //
@@ -8,7 +6,6 @@
 //   /usr/bin/iverilog -g2001 -o hardware/sim/mult_selftest \
 //       hardware/testbench/tb_mult_selftest.v hardware/src/*.v
 //   /usr/bin/vvp hardware/sim/mult_selftest
-// ============================================================
 
 `timescale 1ns/1ps
 

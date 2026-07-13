@@ -1,8 +1,8 @@
 """capture_mel.py — USB 마이크 캡처 + Mel Spectrogram INT8 변환 (Phase 7)
-========================================================================
+
 RPi5에서 오디오를 받아 FPGA가 기대하는 40채널 INT8 Mel 세그먼트로 만든다.
 
-전처리는 학습(software/train.py: extract_mel_spectrogram)과 **반드시 동일**해야 한다:
+전처리는 학습(software/train.py: extract_mel_spectrogram)과 반드시 동일해야 한다:
     data = data - mean(data)
     S      = melspectrogram(sr=16000, n_fft=1024, hop=512, n_mels=40)  # power
     log_S  = power_to_db(S, ref=np.max)
@@ -11,9 +11,9 @@ RPi5에서 오디오를 받아 FPGA가 기대하는 40채널 INT8 Mel 세그먼�
     mel    = log_S.T                     # [T, 40]
     mel_int8 = round(mel * 127)          # [0,127] INT8  (RTL/SPI 전송값)
 
-⚠️ 정규화 범위 차이(실시간 한계):
+정규화 범위 차이(실시간 한계):
   학습은 파일 전체(min/max)로 정규화 후 31프레임씩 자른다. 실시간은 ~1초 버퍼
-  하나에 대해 min/max를 잡으므로 분포가 약간 다르다 — 스트리밍에선 불가피하며,
+  하나에 대해 min/max를 잡으므로 분포가 약간 다르다. 스트리밍에선 불가피하며,
   버퍼 길이를 세그먼트(992ms)에 맞춰 그 영향을 최소화한다.
 
 Mel 추출은 **순수 numpy**로 구현(librosa/numba 불필요) → Python 3.13에서도 동작하고
@@ -23,7 +23,7 @@ sounddevice/scipy는 실제 마이크 캡처·리샘플 시점까지 import가 �
 """
 import numpy as np
 
-# ── 학습과 동일한 피처 파라미터 (절대 변경 금지) ──────────────
+# 학습과 동일한 피처 파라미터 (변경 금지)
 SR          = 16000
 N_FFT       = 1024
 HOP_LENGTH  = 512
@@ -49,7 +49,7 @@ def _get_mel_basis():
     return _mel_basis
 
 
-# ── Mel 추출 (순수 numpy — librosa/numba 불필요, Python 3.13 OK) ──
+# Mel 추출 (순수 numpy — librosa/numba 불필요, Python 3.13 OK).
 # librosa.feature.melspectrogram + power_to_db(ref=max) 를 numpy로 재현.
 # 검증: MIMII 12파일에서 int8 max|diff|=1, mismatch 0.001% (사실상 동일).
 
@@ -108,7 +108,7 @@ def waveform_to_segment(y):
     return np.vstack([mel, pad])
 
 
-# ── WAV 파일 입력 (검증·데모용) ───────────────────────────────
+# WAV 파일 입력 (검증·데모용)
 
 def wav_to_segments(path):
     """WAV 파일 → [N_seg][31,40] int8 세그먼트 리스트 (학습 segment_features와 동일)."""
@@ -130,16 +130,16 @@ def wav_to_segments(path):
     return segs
 
 
-# ── 실시간 멀티 마이크 캡처 ───────────────────────────────────
+# 실시간 멀티 마이크 캡처
 
 class MicCapture:
     """USB 마이크 N개에서 ~992ms 버퍼를 블로킹으로 읽어 16kHz Mel 세그먼트로 만든다.
 
     각 마이크가 하나의 track_id에 매핑된다 (track_id = devices 리스트 인덱스).
-    sounddevice(PortAudio)는 객체 생성 시점에만 import → 데스크톱에서도 모듈 로드 가능.
+    sounddevice(PortAudio)는 객체 생성 시점에만 import 하므로 데스크톱에서도 모듈은 로드된다.
 
-    ⚠️ USB 마이크는 보통 16kHz를 직접 지원하지 않으므로(48k/44.1k만 가능),
-       장치가 지원하는 샘플레이트로 녹음한 뒤 16kHz로 리샘플링한다.
+    USB 마이크는 보통 16kHz를 직접 지원하지 않으므로(48k/44.1k만 가능),
+    장치가 지원하는 샘플레이트로 녹음한 뒤 16kHz로 리샘플링한다.
     """
 
     # 16k 직접 지원이 안 될 때 시도할 후보 (높은 품질 순)
@@ -254,7 +254,7 @@ class MicCapture:
         return out
 
 
-# ── arecord(ALSA) 기반 캡처 — PortAudio가 불안정한 Pi용 ────────
+# arecord(ALSA) 기반 캡처 — PortAudio가 불안정한 Pi용
 
 class ArecordCapture:
     """`arecord` 서브프로세스로 고정 길이 녹음. PortAudio(sounddevice)가 데이터를
@@ -327,7 +327,7 @@ class ArecordCapture:
 
 
 def _now():
-    """time.time() — Date 의존 회피용 헬퍼 (모듈 상단 import 불필요화)."""
+    """time.time() 래퍼 — 모듈 상단에서 time을 import하지 않으려고 지연 import한다."""
     import time
     return time.time()
 

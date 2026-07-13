@@ -1,16 +1,14 @@
-// ============================================================
 // demo_snn_top.v — 데모용 시분할 PLIF-T SNN 엔진 (신규)
-// ============================================================
+//
 // mult_snn_top.v 와 데이터패스(MAC·BRAM·ROM·막전위·spike_mem·FSM)는
-// 100% 동일(bit-exact). 차이는 이상 판정 모듈뿐:
-//   mult_snn_top  : anomaly_judge_mult (전역 Leaky Counter, 래치 성격)
-//   demo_snn_top  : anomaly_judge_seg  (세그먼트 단위 다수결 → 매 세그먼트 토글)
+// bit-exact로 동일. 차이는 이상 판정 모듈뿐:
+//   mult_snn_top : anomaly_judge_mult (전역 Leaky Counter, 래치 성격)
+//   demo_snn_top : anomaly_judge_seg  (세그먼트 단위 다수결 → 매 세그먼트 토글)
 //
 // 이를 위해 FSM의 first_ts / buf_done 를 ts_done_r 정렬로 1단 레지스터링해
 // 판정기에 first/last로 전달한다.
 //
-// ※ mult_snn_top.v / snn_top.v / dual_snn_top.v 는 동결. 본 모듈은 신규.
-// ============================================================
+// 참고: mult_snn_top.v / snn_top.v / dual_snn_top.v 는 동결. 본 모듈은 신규.
 
 `timescale 1ns/1ps
 
@@ -29,12 +27,12 @@ module demo_snn_top #(
     output wire                 busy
 );
 
-    // ── mel 래치 ─────────────────────────────────────────────
+    // mel 래치
     reg [319:0] mel_reg;
     always @(posedge clk)
         if (frame_valid) mel_reg <= mel_in;
 
-    // ── FSM ──────────────────────────────────────────────────
+    // FSM
     wire [1:0] layer;
     wire [7:0] neuron_cnt, fan_cnt;
     wire mac_clear, mac_en, mac_shift_en;
@@ -53,7 +51,7 @@ module demo_snn_top #(
         .ts_done(ts_done_comb), .buf_done(buf_done), .busy(busy)
     );
 
-    // ── 가중치 BRAM 주소 ─────────────────────────────────────
+    // 가중치 BRAM 주소
     wire [13:0] l1_base = {6'b0, neuron_cnt} * 14'd40;
     wire [13:0] l2_base = 14'd5120 + {6'b0, neuron_cnt} * 14'd128;
     wire [13:0] l3_base = 14'd9216 + {6'b0, neuron_cnt} * 14'd32;
@@ -65,7 +63,7 @@ module demo_snn_top #(
                                (layer == 2'd1) ? 8'd128 + neuron_cnt :
                                                  8'd160 + neuron_cnt;
 
-    // ── MAC 입력 a ───────────────────────────────────────────
+    // MAC 입력 a
     wire [127:0] l1_spikes;
     wire [31:0]  l2_spikes;
     wire [7:0]  fan_m1    = fan_cnt - 8'd1;
@@ -78,14 +76,14 @@ module demo_snn_top #(
                                (layer == 2'd1) ? (l1_bit ? 8'sd1 : 8'sd0) :
                                                  (l2_bit ? 8'sd1 : 8'sd0);
 
-    // ── 가중치 BRAM / param ROM ──────────────────────────────
+    // 가중치 BRAM / param ROM
     wire signed [7:0] bram_data;
     weight_bram u_bram (.clk(clk), .addr(bram_addr), .data(bram_data));
 
     wire [7:0] param_beta, param_vth;
     param_rom u_prom (.neuron_idx(neuron_global), .beta(param_beta), .vth(param_vth));
 
-    // ── MAC Unit ─────────────────────────────────────────────
+    // MAC Unit
     wire signed [15:0] mac_current;
     mac_unit u_mac (
         .clk(clk), .rst_n(rst_n),
@@ -94,7 +92,7 @@ module demo_snn_top #(
         .current(mac_current)
     );
 
-    // ── 막전위 (트랙별 BRAM) ─────────────────────────────────
+    // 막전위 (트랙별 BRAM)
     wire signed [15:0] mem_rd;
     wire signed [15:0] mem_new_plif;
 
@@ -107,7 +105,7 @@ module demo_snn_top #(
 
     wire signed [15:0] mem_old = first_ts ? 16'sd0 : mem_rd;
 
-    // ── PLIF-T Core ──────────────────────────────────────────
+    // PLIF-T Core
     wire plift_spike;
     plift_core u_plif (
         .current(mac_current), .mem_in(mem_old),
@@ -115,7 +113,7 @@ module demo_snn_top #(
         .spike(plift_spike), .mem_out(mem_new_plif)
     );
 
-    // ── Spike Memory ─────────────────────────────────────────
+    // Spike Memory
     spike_mem u_spk (
         .clk(clk), .rst_n(rst_n), .clear(spike_clear),
         .wr_en(spike_wr_en), .wr_layer(layer[0]),
@@ -123,7 +121,7 @@ module demo_snn_top #(
         .l1_spikes(l1_spikes), .l2_spikes(l2_spikes)
     );
 
-    // ── L3 스파이크 캡처 ─────────────────────────────────────
+    // L3 스파이크 캡처
     reg spk_normal_r, spk_anomaly_r;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -135,7 +133,7 @@ module demo_snn_top #(
         end
     end
 
-    // ── ts_done / track / first / last 를 1단 정렬 레지스터링 ──
+    // ts_done / track / first / last 를 1단 정렬 레지스터링
     // (spk_*_r 가 유효해지는 ts_done_r 시점에 track/first/last 도 동일 정렬)
     reg ts_done_r, first_ts_r, buf_done_r;
     reg [TRK_W-1:0] cur_track_r;
@@ -153,7 +151,7 @@ module demo_snn_top #(
         end
     end
 
-    // ── 세그먼트 단위 판정기 ─────────────────────────────────
+    // 세그먼트 단위 판정기
     anomaly_judge_seg #(.ACC_WIDTH(8), .N_TRACKS(N_TRACKS), .TRK_W(TRK_W)) u_judge (
         .clk(clk), .rst_n(rst_n),
         .track(cur_track_r),

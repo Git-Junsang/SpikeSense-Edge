@@ -1,9 +1,8 @@
-"""가중치·파라미터 추출 스크립트 (Phase 1)
-========================================
-best_model_mimii_v2-1.pth → INT8 양자화 → $readmemh 호환 hex 파일
+"""가중치·파라미터 추출 스크립트.
 
-양자화 방식
------------
+학습된 .pth(예: best_model_mimii_v2-1.pth)를 INT8로 양자화해 $readmemh 호환 hex로 저장한다.
+
+양자화 방식:
   가중치 W1/W2/W3 : 레이어별 대칭 INT8
       scale_W = max(|W|) / 127
       W_q = clip(round(W / scale_W), -128, 127)
@@ -14,14 +13,14 @@ best_model_mimii_v2-1.pth → INT8 양자화 → $readmemh 호환 hex 파일
 
   V_th : 레이어별 INT8 (W 단위계와 통일)
       vth_q = round(V_th / scale_W)
-      → 학습값 범위에 따라 INT8 불가시 INT16 으로 자동 전환 (경고 출력)
+      → 학습값 범위가 INT8을 벗어나면 INT16으로 자동 전환 (경고 출력)
 
-  Layer 1 MAC 시프트 (L1_SHIFT=7)
+  Layer 1 MAC 시프트 (L1_SHIFT=7):
       mel_int8 = round(mel_float × 127)  [RPi5 전송, 범위 [0,127]]
       MAC = sum(mel × W1) >> 7
       → L2/L3 (binary spike × W) 와 동일 단위계가 됨
 
-출력 (hardware/src/weights/)
+출력 (hardware/src/weights/):
   w1.hex     5120개  INT8  2-char
   w2.hex     4096개  INT8  2-char
   w3.hex       64개  INT8  2-char
@@ -70,7 +69,7 @@ def quant_vth(vth_f, scale_W, name):
 
 
 def save_hex(arr, path, bits):
-    """배열 → $readmemh 형식 hex 파일 (한 줄 = 값 하나)"""
+    """배열을 $readmemh 형식 hex 파일로 저장 (한 줄에 값 하나)."""
     if bits == 8:
         lines = [f"{v:02x}" for v in arr.astype(np.uint8)]
     else:
@@ -88,7 +87,7 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
 
-    # ── 모델 로드 ────────────────────────────
+    # 모델 로드
     print(f"\n[1] 모델 로드: {args.model}")
     ckpt  = torch.load(args.model, map_location="cpu", weights_only=False)
     state = ckpt.get("model_state_dict", ckpt)
@@ -108,7 +107,7 @@ def main():
         vL2 = torch.clamp(model.hidden2_lif.w_thr, 0.1).numpy()   # [32]
         vL3 = torch.clamp(model.output_lif.w_thr, 0.1).numpy()    # [2]
 
-    # ── 양자화 ───────────────────────────────
+    # 양자화
     print("\n[2] 가중치 양자화 (INT8, 레이어별)")
     W1_q, sc1 = quant_weights(W1, "W1")
     W2_q, sc2 = quant_weights(W2, "W2")
@@ -128,7 +127,7 @@ def main():
                                vL2_q.astype(np.int16 if vth_fmt == "int16" else np.int8),
                                vL3_q.astype(np.int16 if vth_fmt == "int16" else np.int8)])
 
-    # ── hex 저장 ─────────────────────────────
+    # hex 저장
     print("\n[5] hex 파일 저장")
     # W: 행 우선 flatten (PyTorch Linear weight [out,in] → RTL neuron-major 순서)
     save_hex(W1_q.flatten(), os.path.join(args.out, "w1.hex"), 8)
@@ -139,7 +138,7 @@ def main():
     save_hex(vth_all, os.path.join(args.out, "vth.hex"),
              16 if vth_fmt == "int16" else 8)
 
-    # ── scales.json ──────────────────────────
+    # scales.json
     scales = {
         "l1_shift": L1_SHIFT,
         "mel_quantization": "mel_int8 = round(mel_float * 127), range [0,127]",

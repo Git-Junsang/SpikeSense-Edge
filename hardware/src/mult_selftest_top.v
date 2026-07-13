@@ -1,6 +1,5 @@
-// ============================================================
 // mult_selftest_top.v — RPi 없이 보드에서 도는 자가진단 (Phase 6-2)
-// ============================================================
+//
 // 외부 자극원(RPi/SPI) 없이, 칩 안에 저장한 골든 anomaly mel을 시분할
 // 엔진(mult_snn_top)에 31타임스텝 먹이고, 출력 스파이크가 골든 기대값과
 // 일치하는지 칩 안에서 자체 비교한다.
@@ -10,7 +9,6 @@
 //
 // 클럭: 100MHz(E3) → clk_div2 → 50MHz. 골든 hex는 합성 시 basename,
 // 시뮬 시 저장소 상대경로(weight_bram.v와 동일 규약).
-// ============================================================
 
 `timescale 1ns/1ps
 
@@ -20,11 +18,11 @@ module mult_selftest_top (
     output reg  [15:0] led
 );
 
-    // ---- 100 → 50 MHz ----
+    // 100 → 50 MHz
     wire clk50;
     clk_div2 u_clkdiv (.clk_in(clk), .clk_out(clk50));
 
-    // ---- 골든 ROM: anomaly mel(31×40B) + 기대 스파이크(62b) ----
+    // 골든 ROM: anomaly mel(31x40B) + 기대 스파이크(62b)
     reg [7:0] mel_rom [0:1239];
     reg [0:0] spk_rom [0:61];
     initial begin
@@ -37,7 +35,7 @@ module mult_selftest_top (
 `endif
     end
 
-    // ---- 시분할 엔진 (track 0만 사용, N_TRACKS=2) ----
+    // 시분할 엔진 (track 0만 사용, N_TRACKS=2)
     reg  [319:0] mel_in;
     reg          frame_valid;
     wire [1:0]   anomaly_flags;
@@ -51,7 +49,7 @@ module mult_selftest_top (
         .dbg_ts_done(dbg_ts_done)
     );
 
-    // ---- 현재 ts의 mel 프레임 패킹 ----
+    // 현재 ts의 mel 프레임 패킹
     reg  [4:0]   ts;
     reg  [319:0] mel_frame;
     integer c;
@@ -61,7 +59,7 @@ module mult_selftest_top (
             mel_frame[c*8 +: 8] = mel_rom[ts*40 + c];
     end
 
-    // ---- 자가진단 FSM ----
+    // 자가진단 FSM
     localparam S_FEED=3'd0, S_WHI=3'd1, S_WLO=3'd2, S_SAMP=3'd3, S_NEXT=3'd4, S_DONE=3'd5;
     reg [2:0] st;
     reg [6:0] fail;   // 불일치 누적 (최대 62)

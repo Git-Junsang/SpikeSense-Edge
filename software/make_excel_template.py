@@ -1,8 +1,7 @@
-"""
-F1 / ROC / PR 엑셀 템플릿 생성기
-=================================
-eval_dcase.csv 를 'data' 시트에 붙여넣으면 threshold 스윕 → F1/ROC/PR 차트가
-자동으로 갱신되는 .xlsx 를 만든다. (pandas/openpyxl 없이 xlsxwriter 만 사용)
+"""F1 / ROC / PR 엑셀 템플릿 생성기.
+
+eval_dcase.csv 를 'data' 시트에 붙여넣으면 threshold 스윕 -> F1/ROC/PR 차트가
+자동 갱신되는 .xlsx 를 만든다. (pandas/openpyxl 없이 xlsxwriter 만 사용)
 
 수식은 plot_metrics.py 와 동일한 표준 정의:
   pred(t)=score>=t,  P=TP/(TP+FP),  R=TP/(TP+FN),  F1=2PR/(P+R)
@@ -53,7 +52,7 @@ note = wb.add_format({"italic": True, "font_color": "#C00000", "text_wrap": True
 f4 = wb.add_format({"num_format": "0.0000"})
 klbl = wb.add_format({"bold": True})
 
-# ---------- data 시트 ----------
+# data 시트
 ws = wb.add_worksheet("data")
 cols = ["seg_index", "true_label", "pred_label", "mem_normal",
         "mem_anomaly", "score_anomaly", "correct"]
@@ -67,7 +66,7 @@ ws.write(0, 9, "▶ 사용법: 이 시트 A1(또는 A2)부터 eval_dcase.csv 전
                "(true_label=B열, score_anomaly=F열 / 값이 숫자여야 함)", note)
 ws.set_column(9, 9, 60)
 
-# ---------- metrics 시트 ----------
+# metrics 시트
 ms = wb.add_worksheet("metrics")
 mcols = ["threshold", "TP", "FP", "FN", "TN", "Precision", "Recall(TPR)", "F1", "FPR"]
 for c, h in enumerate(mcols):
@@ -93,7 +92,7 @@ for i in range(101):                 # threshold 0.00 ~ 1.00
     ms.write_formula(r, 8, f"=IF(({FP}+{TN})=0,0,{FP}/({FP}+{TN}))", f4)   # FPR
 ms.set_column(0, 8, 11)
 
-# ---------- 요약 ----------
+# 요약
 ms.write(0, 10, "요약", klbl)
 ms.write(1, 10, "best F1", klbl);          ms.write_formula(1, 11, "=MAX($H$2:$H$102)", f4)
 ms.write(2, 10, "best threshold", klbl);   ms.write_formula(2, 11, "=INDEX($A$2:$A$102,MATCH(MAX($H$2:$H$102),$H$2:$H$102,0))", f4)
@@ -102,7 +101,7 @@ ms.write(4, 10, "ROC AUC", klbl);          ms.write_formula(4, 11, "=SUMPRODUCT(
 ms.write(5, 10, "PR AUC", klbl);           ms.write_formula(5, 11, "=SUMPRODUCT(($G$2:$G$101-$G$3:$G$102),($F$2:$F$101+$F$3:$F$102)/2)", f4)
 ms.set_column(10, 11, 16)
 
-# ---------- 차트 ----------
+# 차트
 c_f1 = wb.add_chart({"type": "line"})
 c_f1.add_series({"name": "F1",
                  "categories": "=metrics!$A$2:$A$102",

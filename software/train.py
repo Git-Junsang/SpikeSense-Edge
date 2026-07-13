@@ -1,10 +1,8 @@
-"""
-SNN 학습 루프 (v13 - 완벽한 Checkpoint Resume 지원)
-=======================================================
-변경 사항:
-  - 모델 가중치뿐만 아니라 최고 점수(best_f1), 옵티마이저, 스케줄러, 에포크 상태를 모두 저장.
-  - Resume 시 이전 최고 점수를 기억하여 덮어쓰기 방지.
-  - 기존 구버전 .pth 파일 로드 시 초기 평가를 수행해 best_f1 값을 복원하는 호환성 추가.
+"""SNN 학습 루프.
+
+체크포인트에 모델 가중치, best_f1, 옵티마이저·스케줄러 상태, 에포크를 함께 저장한다.
+Resume 시 이전 최고 점수를 기억해 덮어쓰기를 막고, 가중치만 든 구버전 .pth는
+로드 후 초기 평가로 best_f1을 복원한다.
 """
 
 import os
@@ -26,9 +24,7 @@ import soundfile as sf
 
 from snn_model import AnomalySNN
 
-# ============================================================
-# 1. Focal Loss 구현
-# ============================================================
+# Focal Loss
 
 class FocalLoss(nn.Module):
     def __init__(self, weight=None, gamma=2.0):
@@ -50,9 +46,7 @@ class FocalLoss(nn.Module):
         loss = -1 * (1 - pt) ** self.gamma * log_pt
         return loss.mean()
 
-# ============================================================
-# 2. 전처리 및 Dataset
-# ============================================================
+# 전처리 및 Dataset
 
 def extract_mel_spectrogram(filepath, sr=16000, n_mels=40, n_fft=1024, hop_length=512):
     data, file_sr = sf.read(filepath)
@@ -118,9 +112,7 @@ def load_mimii_data(data_dir, n_mels=40, segment_frames=31):
     np.savez_compressed(cache_file, segments=all_segments, labels=all_labels)
     return all_segments, all_labels
 
-# ============================================================
-# 3. 학습 루프
-# ============================================================
+# 학습 루프
 
 def train_one_epoch(model, dataloader, optimizer, loss_fn, device, mixup_alpha=0.2):
     model.train()
@@ -176,9 +168,7 @@ def evaluate(model, dataloader, loss_fn, device):
     f1 = f1_score(all_targets, all_preds, average="binary", zero_division=0)
     return total_loss / len(dataloader), accuracy_score(all_targets, all_preds), f1
 
-# ============================================================
-# 4. 메인 실행부
-# ============================================================
+# 메인 실행부
 
 def main():
     parser = argparse.ArgumentParser()
@@ -195,10 +185,10 @@ def main():
                         help="에포크별 학습곡선 기록 CSV 경로 (기본: <model_name>_history.csv)")
     args = parser.parse_args()
 
-    # ★ 학습 곡선용 에포크 로그 경로 (미지정 시 모델명 기반 자동)
+    # 학습 곡선 로그 경로 (미지정 시 모델명 기반)
     log_csv = args.log_csv or (os.path.splitext(args.model_name)[0] + "_history.csv")
 
-    # ★ 고정 seed — train/test split 재현 + evaluate_dcase.py에서 동일 held-out 사용
+    # 고정 seed — train/test split 재현 + evaluate_dcase.py에서 동일 held-out 사용
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
@@ -228,11 +218,11 @@ def main():
     best_f1 = -1.0
     start_epoch = 1
 
-    # ★ 완벽한 Resume 로직
+    # Resume 처리
     if args.resume and os.path.exists(args.model_name):
         checkpoint = torch.load(args.model_name)
-        
-        # 신버전(체크포인트) 형식인 경우
+
+        # 신버전 체크포인트 형식
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -241,7 +231,7 @@ def main():
             start_epoch = checkpoint['epoch'] + 1
             print(f"  📂 체크포인트 로드 완료: 이전 최고 F1 {best_f1:.4f}, 에포크 {start_epoch}부터 시작합니다.")
         
-        # 구버전(가중치만 있는) 형식인 경우 호환성 처리
+        # 구버전(가중치만 저장) 호환 처리
         else:
             model.load_state_dict(checkpoint)
             print(f"  📂 구버전 가중치 로드 완료. 정확한 최고 기록 보존을 위해 초기 평가를 진행합니다...")
@@ -249,7 +239,7 @@ def main():
             best_f1 = initial_f1
             print(f"     -> 복원된 초기 최고 F1: {best_f1:.4f}")
 
-    # ★ 학습 곡선 CSV — resume면 이어쓰기(append), 새 학습이면 헤더부터
+    # 학습 곡선 CSV — resume면 이어쓰기, 새 학습이면 헤더부터
     append_log = args.resume and start_epoch > 1 and os.path.exists(log_csv)
     log_f = open(log_csv, "a" if append_log else "w", newline="")
     log_writer = csv.writer(log_f)
@@ -274,7 +264,7 @@ def main():
         if epoch % 5 == 0 or test_f1 > best_f1:
             print(f"📘 에포크 {epoch:3d} | Train Acc: {train_acc:.2%} | Test Acc: {test_acc:.2%} | F1: {test_f1:.4f} | LR: {cur_lr:.6f}")
 
-        # ★ 체크포인트 형식으로 묶어서 저장
+        # 체크포인트로 묶어서 저장
         if test_f1 > best_f1:
             best_f1 = test_f1
             checkpoint = {
@@ -283,7 +273,7 @@ def main():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'best_f1': best_f1,
-                # ★ held-out 재현용 split 메타 (evaluate_dcase.py가 사용)
+                # held-out 재현용 split 메타 (evaluate_dcase.py가 사용)
                 'split_seed': args.seed,
                 'segment_frames': segment_frames,
                 'n_mels': args.n_mels,

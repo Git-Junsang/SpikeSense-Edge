@@ -1,19 +1,14 @@
-// ============================================================
 // snn_top.v — PLIF-T SNN 이상 감지 최상위 모듈
-// ============================================================
-// 외부 인터페이스:
-//   입력: mel_in[40×8bit, packed little-endian: mel_in[7:0]=ch0] + frame_valid
-//   출력: anomaly_flag, busy
+//
+// 인터페이스: 입력 mel_in[40×8bit, little-endian, mel_in[7:0]=ch0] + frame_valid,
+//             출력 anomaly_flag, busy
 //
 // 내부 흐름 (31 타임스텝 / 버퍼):
-//   frame_valid → mel 래치 → (버퍼 시작이면 membrane reset)
-//   → spike_mem clear
+//   frame_valid → mel 래치 → (버퍼 시작이면 membrane reset) → spike_mem clear
 //   → L1: 128뉴런 × 40입력 (mel×W1, shift>>7)
 //   → L2:  32뉴런 × 128입력 (L1_spike×W2)
 //   → L3:   2뉴런 ×  32입력 (L2_spike×W3)
-//   → 다음 frame_valid 대기 → 반복
-//   → 31회 후 anomaly_judge 업데이트 → anomaly_flag
-// ============================================================
+//   → 다음 frame_valid 대기 → 반복, 31회 후 anomaly_judge 업데이트 → anomaly_flag
 
 `timescale 1ns/1ps
 
@@ -30,17 +25,13 @@ module snn_top (
     output wire         busy
 );
 
-    // =========================================================
-    // mel 래치 (frame_valid 상승 시 등록)
-    // =========================================================
+    // mel 래치 (frame_valid 시 등록)
     reg [319:0] mel_reg;
     always @(posedge clk) begin
         if (frame_valid) mel_reg <= mel_in;
     end
 
-    // =========================================================
     // FSM
-    // =========================================================
     wire [1:0] layer;
     wire [7:0] neuron_cnt;
     wire [7:0] fan_cnt;
@@ -67,12 +58,10 @@ module snn_top (
         .busy         (busy)
     );
 
-    // =========================================================
     // BRAM 주소 계산
-    // =========================================================
-    // L1: addr = neuron_cnt*40 + fan_cnt   (0..5119)
-    // L2: addr = 5120 + neuron_cnt*128 + fan_cnt (5120..9215)
-    // L3: addr = 9216 + neuron_cnt*32  + fan_cnt (9216..9279)
+    // L1: neuron_cnt*40 + fan_cnt          (0..5119)
+    // L2: 5120 + neuron_cnt*128 + fan_cnt  (5120..9215)
+    // L3: 9216 + neuron_cnt*32  + fan_cnt  (9216..9279)
     wire [13:0] l1_base = {6'b0, neuron_cnt} * 14'd40;
     wire [13:0] l2_base = 14'd5120 + {6'b0, neuron_cnt} * 14'd128;
     wire [13:0] l3_base = 14'd9216 + {6'b0, neuron_cnt} * 14'd32;
@@ -80,21 +69,13 @@ module snn_top (
                              (layer == 2'd1) ? l2_base : l3_base)
                             + {6'b0, fan_cnt};
 
-    // =========================================================
-    // 전역 뉴런 인덱스 (param_rom, membrane_mem 공용)
-    // =========================================================
-    // L1: 0..127, L2: 128..159, L3: 160..161
+    // 전역 뉴런 인덱스 (param_rom, membrane_mem 공용): L1 0..127, L2 128..159, L3 160..161
     wire [7:0] neuron_global = (layer == 2'd0) ? neuron_cnt :
                                (layer == 2'd1) ? 8'd128 + neuron_cnt :
                                                  8'd160 + neuron_cnt;
 
-    // =========================================================
-    // MAC 입력 a 계산
-    // =========================================================
-    // fan_cnt=k (1..FAN_IN): a = input[k-1]
-    // L1: mel_reg[(k-1)*8 +: 8]
-    // L2: l1_spikes[k-1] ? 8'sd1 : 8'sd0
-    // L3: l2_spikes[k-1] ? 8'sd1 : 8'sd0
+    // MAC 입력 a 계산: fan_cnt=k(1..FAN_IN)일 때 a = input[k-1]
+    // L1 = mel_reg 바이트, L2/L3 = spike 비트(0/1)
     wire [127:0] l1_spikes;
     wire [31:0]  l2_spikes;
 
@@ -108,9 +89,7 @@ module snn_top (
                                (layer == 2'd1) ? (l1_bit ? 8'sd1 : 8'sd0) :
                                                   (l2_bit ? 8'sd1 : 8'sd0);
 
-    // =========================================================
     // Weight BRAM
-    // =========================================================
     wire signed [7:0] bram_data;
     weight_bram u_bram (
         .clk  (clk),
@@ -118,9 +97,7 @@ module snn_top (
         .data (bram_data)
     );
 
-    // =========================================================
     // Param ROM (β, V_th)
-    // =========================================================
     wire [7:0] param_beta, param_vth;
     param_rom u_prom (
         .neuron_idx (neuron_global),
@@ -128,9 +105,7 @@ module snn_top (
         .vth        (param_vth)
     );
 
-    // =========================================================
     // MAC Unit
-    // =========================================================
     wire signed [15:0] mac_current;
     mac_unit u_mac (
         .clk      (clk),
@@ -143,10 +118,7 @@ module snn_top (
         .current  (mac_current)
     );
 
-    // =========================================================
-    // Membrane Memory (membrane_mem)
-    // membrane reset: rst_n & ~mem_rst_pulse (버퍼 경계 초기화)
-    // =========================================================
+    // Membrane Memory — reset = rst_n & ~mem_rst_pulse (버퍼 경계 초기화)
     wire mem_rst_n_in = rst_n & ~mem_rst_pulse;
     wire signed [15:0] mem_old, mem_new_plif;
 
@@ -159,9 +131,7 @@ module snn_top (
         .mem_out    (mem_old)
     );
 
-    // =========================================================
     // PLIF-T Core (조합논리)
-    // =========================================================
     wire plift_spike;
     plift_core u_plif (
         .current (mac_current),
@@ -172,9 +142,7 @@ module snn_top (
         .mem_out (mem_new_plif)
     );
 
-    // =========================================================
     // Spike Memory
-    // =========================================================
     spike_mem u_spk (
         .clk      (clk),
         .rst_n    (rst_n),
@@ -187,12 +155,9 @@ module snn_top (
         .l2_spikes(l2_spikes)
     );
 
-    // =========================================================
     // L3 스파이크 캡처 → anomaly_judge
-    // =========================================================
-    // write-back cycle에 plift_spike 캡처
-    // ts_done은 L3 neuron_cnt=1의 write-back과 동시이므로
-    // anomaly_judge.update는 1사이클 지연 (ts_done_r)
+    // write-back 사이클에 plift_spike 캡처. ts_done이 L3 neuron_cnt=1의 write-back과
+    // 동시라서 anomaly_judge.update는 1사이클 지연시킨다 (ts_done_r).
     reg spk_normal_r, spk_anomaly_r;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -210,9 +175,7 @@ module snn_top (
         else        ts_done_r <= ts_done_comb;
     end
 
-    // =========================================================
     // Anomaly Judge
-    // =========================================================
     anomaly_judge #(.CNT_WIDTH(24), .SHIFT_N(14)) u_judge (
         .clk             (clk),
         .rst_n           (rst_n),

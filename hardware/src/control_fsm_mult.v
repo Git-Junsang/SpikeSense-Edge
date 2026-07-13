@@ -1,17 +1,15 @@
-// ============================================================
 // control_fsm_mult.v — 다중 트랙 시분할 PLIF-T SNN 시퀀서 FSM
-// ============================================================
+//
 // control_fsm.v의 다중 트랙 확장판.
 //   - frame_valid + track_id로 한 프레임(=한 타임스텝)을 처리
 //   - 트랙별 ts 카운터(ts_arr) 유지 → 각 트랙이 독립적으로 0..TS_TOTAL-1 순환
-//   - 막전위 비동기 리셋(S_MEM_RST) 제거: 대신 first_ts(=ts_arr[track]==0)를
-//     출력해 상위에서 mem_old=0 마스킹으로 버퍼 시작 초기화
+//   - 막전위 비동기 리셋(S_MEM_RST) 대신 first_ts(=ts_arr[track]==0)를 출력해
+//     상위에서 mem_old=0 마스킹으로 버퍼 시작을 초기화
 //
 // 뉴런당 타이밍 (단일채널과 동일):
-//   fan_cnt=0        : mac_clear, (BRAM/막전위 주소는 안정)
-//   fan_cnt=1..FAN   : mac_en
-//   fan_cnt=FAN+1    : mem_wr_en (write-back)
-// ============================================================
+//   fan_cnt=0      : mac_clear (BRAM/막전위 주소 안정)
+//   fan_cnt=1..FAN : mac_en
+//   fan_cnt=FAN+1  : mem_wr_en (write-back)
 
 `timescale 1ns/1ps
 

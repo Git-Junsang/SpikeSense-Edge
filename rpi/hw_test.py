@@ -1,6 +1,6 @@
 """hw_test.py — Phase 8 RPi5 ↔ FPGA SPI 통합 테스트 (LED 관찰 기반)
-====================================================================
-마이크/모델 정확도와 무관하게 **RPi→FPGA SPI 링크 + 트랙 디먹스 + 이상 판정**만
+
+마이크/모델 정확도와 무관하게 RPi→FPGA SPI 링크 + 트랙 디먹스 + 이상 판정만
 검증한다. FPGA는 수신 전용(MISO 없음)이라 결과는 보드 LED로 눈으로 확인한다.
 
 전제: FPGA에 mult_spi_top 비트스트림이 프로그램되어 있고, 아래 배선이 되어 있을 것.
@@ -15,7 +15,7 @@
 
 HW 이상 판정 = L3 스파이크 Leaky Counter (SW 막전위 argmax와 규칙 다름).
 hw_anomaly_mel.npy(cnt_a≫cnt_n) / hw_normal_mel.npy(cnt_n≫cnt_a)를 전용 입력으로 사용.
-※ 카운터는 전역 리셋에서만 0 → 테스트 전 보드 CPU_RESETN(C12) 한 번 눌러 초기화 권장.
+카운터는 전역 리셋에서만 0이 되므로, 테스트 전 보드 CPU_RESETN(C12)을 한 번 눌러 초기화한다.
 
 모드:
   wiring   — 인식 가능한 패턴을 계속 전송 (오실로스코프/로직애널라이저로 SCK/MOSI/CS 확인)
